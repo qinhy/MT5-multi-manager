@@ -19,6 +19,7 @@ class MT5Action:
     def __init__(self) -> None:       
         # do set_account at first
         self._account:MT5Account = None
+        self.retry_times_on_error = 3
 
     def set_account(self,account_id,password,account_server):
         # do this at first
@@ -27,11 +28,25 @@ class MT5Action:
         self._account.account_server=account_server
         return self
     
+    def _run(self):
+        try:
+            self.run()
+        except Exception as e:
+            print(e)
+            self._on_error(e)
+
     def run(self):
         print('do your action at here with mt5')
     
     def on_error(self):
-        pass
+        print('not implement')
+
+    def _on_error(self):
+        self.retry_times_on_error-=1
+        if self.retry_times_on_error>0:
+            self.run()
+        else:
+            self.on_error()
 
     def on_end(self):
         pass
