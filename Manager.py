@@ -11,15 +11,22 @@ class MT5Account(BaseModel):
     password: SecretStr = '' # for @mt5_class_operation
     account_server: SecretStr = '' # for @mt5_class_operation
 
+    def is_valid(self):
+        if self.account_id is None:raise ValueError('account_id is not set')
+        if self.password.get_secret_value() == '':raise ValueError('password is not set')
+        if self.account_server.get_secret_value() == '':raise ValueError('account_server is not set')
+        return True
+
+
 class MT5Action:
     #     timeout 
     #     retry_times on timeout
     #     retry_times on error
     
-    def __init__(self) -> None:       
+    def __init__(self,account:MT5Account, retry_times_on_error=3) -> None:       
         # do set_account at first
-        self._account:MT5Account = None
-        self.retry_times_on_error = 3
+        self._account:MT5Account = account
+        self.retry_times_on_error = retry_times_on_error
 
     def set_account(self,account_id,password,account_server):
         # do this at first
@@ -31,6 +38,7 @@ class MT5Action:
     def _run(self):
         try:
             self.run()
+            self.on_end()
         except Exception as e:
             print(e)
             self._on_error(e)
@@ -39,17 +47,19 @@ class MT5Action:
         print('do your action at here with mt5')
     
     def on_error(self):
-        print('not implement')
+        pass
+        # print('not implement')
 
     def _on_error(self):
         self.retry_times_on_error-=1
         if self.retry_times_on_error>0:
-            self.run()
+            self._run()
         else:
             self.on_error()
 
     def on_end(self):
         pass
+        # print('not implement')
 
 class MT5Manager:
     class TerminalLock:
@@ -104,22 +114,26 @@ class MT5Manager:
                 raise ValueError(f"Failed to initialize MT5 for executable path: {l.exe_path}")
             
             if action._account is None:raise ValueError('_account is not set')
-            if action._account.account_id is None:raise ValueError('_account.account_id is not set')
-            if action._account.password.get_secret_value() == '':raise ValueError('_account.password is not set')
-            if action._account.account_server.get_secret_value() == '':raise ValueError('_account.account_server is not set')
-
-            # Extract parameters from kwargs or use default values
-            logind = dict(account_id=action._account.account_id,
-                          password=action._account.password.get_secret_value(),
-                          account_server=action._account.account_server.get_secret_value())
+            action._account.is_valid()
+            account = action._account
+    
+            if not mt5.login(account.account_id,
+                             password=account.password.get_secret_value(),
+                             server=account.account_server.get_secret_value()):                
+                raise ValueError(f"Failed to log in with account ID: {account.account_id}")
             
-            if all(list(logind.values())) and not mt5.login(logind['account_id'], 
-                                                            password=logind['password'],
-                                                            server=logind['account_server']):                
-                raise ValueError(f"Failed to log in with account ID: {logind['account_id']}")
-            
-            action.run()
+            action._run()
         finally:
             mt5.shutdown()  # Ensure shutdown is called even if an error occurs
             l.release()
         # release lock
+
+class AccountInfo(MT5Action):
+    def run():
+        # Example operation: Getting account information
+        account_info = mt5.account_info()
+        print(account_info)
+        if account_info is None:
+            return "Failed to get account info"
+        else:
+            return account_info
