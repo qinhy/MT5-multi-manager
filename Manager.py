@@ -217,6 +217,10 @@ class Book(BaseModel):
     _type: str = ''
     _swap: int = 0
 
+    def as_plan(self):
+        self.state = Book.Controller.Plan()
+        return self
+    
     def send(self):
         self.state.send(self)
         return self
