@@ -2,6 +2,7 @@ from threading import Lock
 import random
 import time
 from typing import Any, Dict, List
+import uuid
 
 import MetaTrader5 as mt5
 from pydantic import BaseModel, SecretStr
@@ -26,6 +27,7 @@ class MT5Action:
     
     def __init__(self,account:MT5Account, retry_times_on_error=3) -> None:       
         # do set_account at first
+        self.uuid = uuid.uuid4()
         self._account:MT5Account = account
         self.retry_times_on_error = retry_times_on_error
 
@@ -37,12 +39,14 @@ class MT5Action:
         return self
     
     def _run(self):
+        res = None
         try:
-            self.run()
-            self.on_end()
+            res = self.run()
+            self.on_end(res)
         except Exception as e:
             print(e)
-            self._on_error(e)
+            return self._on_error(e)
+        return res
 
     def run(self):
         print('do your action at here with mt5')
@@ -55,11 +59,11 @@ class MT5Action:
         self.retry_times_on_error-=1
         if self.retry_times_on_error>0:
             time.sleep(1)
-            self._run()
+            return self._run()
         else:
-            self.on_error(e)
+            return self.on_error(e)
 
-    def on_end(self):
+    def on_end(self,res):
         pass
         # print('not implement')
 
@@ -80,6 +84,7 @@ class MT5Manager:
             self.release()
 
     def __init__(self) -> None:
+        self.results = {}
         self.terminals:Dict[str,List[MT5Manager.TerminalLock]] = {}
     # {
     #     'TitanFX':[
@@ -125,7 +130,8 @@ class MT5Manager:
                              server=account.account_server.get_secret_value()):                
                 raise ValueError(f"Failed to log in with account ID: {account.account_id}")
             
-            action._run()
+            if action.uuid not in self.results:self.results[action.uuid]=[]
+            self.results[action.uuid].push(action._run())            
         finally:
             mt5.shutdown()  # Ensure shutdown is called even if an error occurs
             l.release()
