@@ -84,7 +84,7 @@ class MT5Manager:
             self.release()
 
     def __init__(self) -> None:
-        self.results = {}
+        self.results:Dict[str,List[Any]] = {}
         self.terminals:Dict[str,List[MT5Manager.TerminalLock]] = {}
     # {
     #     'TitanFX':[
@@ -131,7 +131,7 @@ class MT5Manager:
                 raise ValueError(f"Failed to log in with account ID: {account.account_id}")
             
             if action.uuid not in self.results:self.results[action.uuid]=[]
-            self.results[action.uuid].push(action._run())            
+            self.results[action.uuid].append(action._run())            
         finally:
             mt5.shutdown()  # Ensure shutdown is called even if an error occurs
             l.release()
