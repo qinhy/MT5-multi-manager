@@ -260,7 +260,7 @@ class Book(BaseModel):
         if self._book.__class__.__name__ == "TradeOrder" : 
             self._is_order=True
             self.state = Book.Controller.Order()
-        elif self._book.__class__.__name__ == "TradePositio": 
+        elif self._book.__class__.__name__ == "TradePosition": 
             self._is_position=True
             self.state = Book.Controller.Position()
         if hasattr(self._book,'volume_current'):
