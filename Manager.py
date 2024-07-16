@@ -209,6 +209,7 @@ class Book(BaseModel):
     tp: float = 0.0
     price_open: float = 0.0
     volume: float = 0.0
+    magic:int = 901000
 
     _book: Any = None# mt5_order_position
     _is_order: bool = False
@@ -338,7 +339,7 @@ class Book(BaseModel):
             "position": self._ticket,
             "price": price,
             "deviation": deviation,
-            "magic": 901000,
+            "magic": self.magic,
             "comment": "script close",
             "type_time": mt5.ORDER_TIME_GTC,
             #"type_filling": mt5.ORDER_FILLING_IOC,
@@ -387,7 +388,7 @@ class Book(BaseModel):
             "sl": self.sl,
             "tp": self.tp,
             "deviation": deviation,
-            "magic": 901000,
+            "magic": self.magic,
             "comment": "auto order",
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_RETURN,
