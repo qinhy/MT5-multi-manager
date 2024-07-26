@@ -1,10 +1,23 @@
 
 from fastapi import FastAPI, HTTPException
 from Manager import MT5Manager,MT5Account,MT5Action,Book
+
 class GetBooks(MT5Action):
-    def run(acc:MT5Account):
+    def run(self):
         tbs = {f'{b.symbol}-{b.price_open}-{b.volume}':b.model_dump() for b in Book().getBooks()}
         return tbs
+
+class BookActon(MT5Action):
+    def __init__(self, account: MT5Account,book:Book,retry_times_on_error=3) -> None:
+        super().__init__(account, retry_times_on_error)
+        self.book = book
+    
+    def change_run(self,func_name, kwargs):
+        self.book_run = lambda:getattr(self.book,func_name)(**kwargs)
+
+    def run(self):
+        # tbs = {f'{b.symbol}-{b.price_open}-{b.volume}':b.model_dump() for b in Book().getBooks()}
+        return self.book_run()
 
 ######################################### Celery connect to local rabbitmq and db sqlite backend
 
@@ -24,33 +37,39 @@ class CeleryTask:
     @staticmethod
     @celery_app.task(bind=True)
     def get_books(t:Task, acc:MT5Account):
-        gtb = GetBooks(acc)  
+        gtb = GetBooks(acc)
         mt5manager.do(gtb)
         return mt5manager.results[gtb.uuid][0]
 
     @staticmethod
     @celery_app.task(bind=True)
-    def book_send(t:Task,acc:MT5Account):
+    def book_send(t:Task,acc:MT5Account,book:Book):
+        ba = BookActon(acc,book.as_plan())
+        ba.change_run('send',{})
+        mt5manager.do(ba)
+        return mt5manager.results[ba.uuid][0]
+
+    @staticmethod
+    @celery_app.task(bind=True)
+    def book_close(t:Task,acc:MT5Account,book:Book):
+        ba = BookActon(acc,book)
+        ba.change_run('close',{})
+        mt5manager.do(ba)
+        return mt5manager.results[ba.uuid][0]
+
+    @staticmethod
+    @celery_app.task(bind=True)
+    def book_changeP(t:Task,acc:MT5Account,book:Book,p):
         pass
 
     @staticmethod
     @celery_app.task(bind=True)
-    def book_close(t:Task,acc:MT5Account):
+    def book_changeTS(t:Task,acc:MT5Account,book:Book,tp,sl):
         pass
 
     @staticmethod
     @celery_app.task(bind=True)
-    def book_changeP(t:Task,acc:MT5Account,p):
-        pass
-
-    @staticmethod
-    @celery_app.task(bind=True)
-    def book_changeTS(t:Task,acc:MT5Account,tp,sl):
-        pass
-
-    @staticmethod
-    @celery_app.task(bind=True)
-    def account_info(t:Task,acc:MT5Account):
+    def account_info(t:Task,acc:MT5Account,book:Book):
         pass
 
 
