@@ -5,34 +5,16 @@ import uuid
 from typing import Any, Dict, List
 
 import MetaTrader5 as mt5
-from pydantic import BaseModel, SecretStr, field_validator
+from pydantic import BaseModel
 
 
 class MT5Account(BaseModel):
     account_id: int = None  # for @mt5_class_operation
-    password: SecretStr = SecretStr('')  # for @mt5_class_operation
-    account_server: SecretStr = SecretStr('')  # for @mt5_class_operation
-
-    @field_validator("account_id")
-    def validate_account_id(cls, account_id:int):
-        if account_id is None:
-            raise ValueError("Account ID is not set")
-        return account_id
-
-    @field_validator("password")
-    def validate_password(cls, password:SecretStr):
-        if not password.get_secret_value():
-            raise ValueError("Password is not set")
-        return password
-
-    @field_validator("account_server")
-    def validate_account_server(cls, account_server:SecretStr):
-        if not account_server.get_secret_value():
-            raise ValueError("Account server is not set")
-        return account_server
+    password: str = ''
+    account_server: str = ''
 
     def is_valid(self):
-        return True
+        return self.account_id is None or self.password=='' or self.account_server==''
 
 class MT5Action:
     def __init__(self, account: MT5Account, retry_times_on_error=3) -> None:
@@ -42,8 +24,8 @@ class MT5Action:
 
     def set_account(self, account_id, password, account_server):
         self._account.account_id = account_id
-        self._account.password = SecretStr(password)
-        self._account.account_server = SecretStr(account_server)
+        self._account.password = password
+        self._account.account_server = account_server
         return self
 
     def run_action(self):
@@ -73,26 +55,43 @@ class MT5Action:
         print("Action completed successfully")
 
 class MT5Manager:
+    # statics for singleton
+    _uuid = uuid.uuid4()
+    _results:Dict[str,List[Any]] = {}
+    _terminals:Dict[str,List] = {}
+    _is_singleton = True
+    _meta = {}
+
     class TerminalLock:
-        def __init__(self, exe_path="path/to/your/terminal64.exe"):
-            self.exe_path = exe_path
+        def __init__(self,exe_path="path/to/your/terminal64.exe"):
+            self.exe_path=exe_path
             self._lock = Lock()
-
         def acquire(self):
+            # print("acquired", self)
             self._lock.acquire()
-
         def release(self):
+            # print("released", self)
             self._lock.release()
-
         def __enter__(self):
             self.acquire()
-
         def __exit__(self, type, value, traceback):
             self.release()
 
-    def __init__(self) -> None:
-        self.results: Dict[str, List[Any]] = {}
-        self.terminals: Dict[str, List[MT5Manager.TerminalLock]] = {}
+        
+    def __init__(self,id=None,results=None,terminals=None,is_singleton=None):
+        self.uuid = uuid.uuid4() if id is None else id
+        self.results:Dict[str,List[Any]] = None if results is None else results
+        self.terminals:Dict[str,List[MT5Manager.TerminalLock]] = None if terminals is None else terminals
+        self.is_singleton:bool = False if is_singleton is None else is_singleton
+    # {
+    #     'TitanFX':[
+    #         MT5Manager.TerminalLock(exe_path="path/to/your/terminal64.exe")
+    #     ],
+    #     'XMTrading':[ MT5Manager.TerminalLock(exe_path="path/to/your/terminal64.exe") ],
+    # }
+    
+    def get_singleton(self):
+        return self.__class__(self._uuid,self._results,self._terminals,self._is_singleton)
 
     def add_terminal(self, account_server='XMTrading', exe_path="path/to/your/terminal64.exe"):
         if account_server not in self.terminals:
@@ -107,7 +106,7 @@ class MT5Manager:
         return random.choice(t_locks)
 
     def do(self, action: MT5Action):
-        terminal_lock = self._get_terminal_lock(action._account.account_server.get_secret_value())
+        terminal_lock = self._get_terminal_lock(action._account.account_server)
         try:
             terminal_lock.acquire()
             if not mt5.initialize(path=terminal_lock.exe_path):
@@ -118,7 +117,7 @@ class MT5Manager:
             action._account.is_valid()
             account = action._account
 
-            if not mt5.login(account.account_id, password=account.password.get_secret_value(), server=account.account_server.get_secret_value()):
+            if not mt5.login(account.account_id, password=account.password, server=account.account_server):
                 raise ValueError(f"Failed to log in with account ID: {account.account_id}")
 
             if action.uuid not in self.results:
