@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from your_module_name import RESTapi, MT5Account, Book
+from tasks import RESTapi, MT5Account, Book
 
 # Initialize TestClient with your FastAPI app
 client = TestClient(RESTapi.api)
