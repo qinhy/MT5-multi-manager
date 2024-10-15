@@ -58,7 +58,7 @@ class MT5Manager:
     # statics for singleton
     _uuid = uuid.uuid4()
     _results:Dict[str,List[Any]] = {}
-    _terminals:Dict[str,List] = {}
+    _terminals:Dict[str,set] = {}
     _is_singleton = True
     _meta = {}
 
@@ -81,7 +81,7 @@ class MT5Manager:
     def __init__(self,id=None,results=None,terminals=None,is_singleton=None):
         self.uuid = uuid.uuid4() if id is None else id
         self.results:Dict[str,List[Any]] = None if results is None else results
-        self.terminals:Dict[str,List[MT5Manager.TerminalLock]] = None if terminals is None else terminals
+        self.terminals:Dict[str,set[MT5Manager.TerminalLock]] = None if terminals is None else terminals
         self.is_singleton:bool = False if is_singleton is None else is_singleton
     # {
     #     'TitanFX':[
@@ -95,15 +95,15 @@ class MT5Manager:
 
     def add_terminal(self, account_server='XMTrading', exe_path="path/to/your/terminal64.exe"):
         if account_server not in self.terminals:
-            self.terminals[account_server] = []
-        self.terminals[account_server].append(MT5Manager.TerminalLock(exe_path=exe_path))
+            self.terminals[account_server] = set()
+        self.terminals[account_server].add(MT5Manager.TerminalLock(exe_path=exe_path))
 
     def _get_terminal_lock(self, account_server='XMTrading'):
         broker = account_server.split('-')[0]
-        t_locks = self.terminals.get(broker, [])
-        if not t_locks:
+        t_locks = self.terminals.get(broker, set())
+        if len(t_locks)==0:
             raise ValueError('The broker is not supported!')
-        return random.choice(t_locks)
+        return random.choice(list(t_locks))
 
     def do(self, action: MT5Action):
         terminal_lock = self._get_terminal_lock(action._account.account_server)
@@ -117,8 +117,10 @@ class MT5Manager:
             action._account.is_valid()
             account = action._account
 
-            if not mt5.login(account.account_id, password=account.password, server=account.account_server):
-                raise ValueError(f"Failed to log in with account ID: {account.account_id}")
+            current = mt5.account_info()
+            if not str(current.login)!=str(account.account_id):
+                if not mt5.login(account.account_id, password=account.password, server=account.account_server):
+                    raise ValueError(f"Failed to log in with account ID: {account.account_id}")
 
             if action.uuid not in self.results:
                 self.results[action.uuid] = []
@@ -390,6 +392,10 @@ class Book(BaseModel):
 class BookAction(MT5Action):
     def __init__(self, account: MT5Account, book: Book, retry_times_on_error=3) -> None:
         super().__init__(account, retry_times_on_error)
+        if type(acc) is dict:
+            acc = MT5Account(**acc)
+        if type(book) is dict:
+            book = Book(**book)
         self.book = book
 
     def change_run(self, func_name, kwargs):

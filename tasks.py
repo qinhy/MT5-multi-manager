@@ -27,19 +27,21 @@ class CeleryTask:
     def add_terminal(t:Task, broker: str, path: str):
         return MT5Manager().get_singleton().add_terminal(broker,path)
     
+    # @staticmethod
+    # @celery_app.task(bind=True)
+    # def book_action(t:Task,action_name:str,acc:MT5Account,book:Book,tp,sl):
+    #     ba = BookAction(acc,Book()).change_run(action_name,{})
+    #     return MT5Manager().get_singleton().do(ba)
+    
     @staticmethod
     @celery_app.task(bind=True)
     def account_info(t:Task,acc:MT5Account):
-        if type(acc) is dict:
-            acc = MT5Account(**acc)
         ba = BookAction(acc,Book()).change_run('account_info',{})
         return MT5Manager().get_singleton().do(ba)
 
     @staticmethod
     @celery_app.task(bind=True)
     def get_books(t:Task, acc:MT5Account):
-        if type(acc) is dict:
-            acc = MT5Account(**acc)
         ba = BookAction(acc, Book()).change_run('getBooks',{})
         res:list[Book] = MT5Manager().get_singleton().do(ba)
         tbs = {f'{b.symbol}-{b.price_open}-{b.volume}':b.model_dump() for b in res}
@@ -48,40 +50,24 @@ class CeleryTask:
     @staticmethod
     @celery_app.task(bind=True)
     def book_send(t:Task,acc:MT5Account,book:Book):
-        if type(acc) is dict:
-            acc = MT5Account(**acc)
-        if type(acc) is dict:
-            book = Book(**book)
         ba = BookAction(acc,book.as_plan()).change_run('send',{})
         return MT5Manager().get_singleton().do(ba)
 
     @staticmethod
     @celery_app.task(bind=True)
     def book_close(t:Task,acc:MT5Account,book:Book):
-        if type(acc) is dict:
-            acc = MT5Account(**acc)
-        if type(acc) is dict:
-            book = Book(**book)
         ba = BookAction(acc,book).change_run('close',{})
         return MT5Manager().get_singleton().do(ba)
 
     @staticmethod
     @celery_app.task(bind=True)
     def book_changeP(t:Task,acc:MT5Account,book:Book,p):
-        if type(acc) is dict:
-            acc = MT5Account(**acc)
-        if type(acc) is dict:
-            book = Book(**book)
         ba = BookAction(acc,book).change_run('close',dict(p=p))
         return MT5Manager().get_singleton().do(ba)
 
     @staticmethod
     @celery_app.task(bind=True)
     def book_changeTS(t:Task,acc:MT5Account,book:Book,tp,sl):
-        if type(acc) is dict:
-            acc = MT5Account(**acc)
-        if type(acc) is dict:
-            book = Book(**book)
         ba = BookAction(acc,book).change_run('changeTS',dict(tp=tp,sl=sl))
         return MT5Manager().get_singleton().do(ba)
 
