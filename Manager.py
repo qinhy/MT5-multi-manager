@@ -5,7 +5,7 @@ import uuid
 from typing import Any, Dict, List
 
 import MetaTrader5 as mt5
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class MT5Account(BaseModel):
@@ -152,7 +152,7 @@ class Book(BaseModel):
             def changeTS(self,book,tp,sl):
                 raise ValueError(f'This is a {self.type} state')
 
-        class Plan(BaseModel):
+        class Plan(Null):
             type:str = 'Plan'
             def send(self,book):
                 book:Book = book
@@ -167,7 +167,7 @@ class Book(BaseModel):
                 book:Book = book
                 book.tp,book.sl=tp,sl
             
-        class Order(BaseModel):
+        class Order(Null):
             type:str = 'Order'
             def send(self,book):
                 raise ValueError('This is a exists Order')
@@ -182,7 +182,7 @@ class Book(BaseModel):
                 res = Book.Controller._try(lambda:book._changeOrderTPSL(tp,sl))
                 if res : book.tp,book.sl=tp,sl
 
-        class Position(BaseModel):
+        class Position(Null):
             type:str = 'Position'
             def send(self,book):
                 raise ValueError('This is a exists Position')
@@ -196,8 +196,22 @@ class Book(BaseModel):
                 book:Book = book
                 res = Book.Controller._try(lambda:book._changePositionTPSL(tp,sl))
                 if res : book.tp,book.sl=tp,sl
-            
-    state: Controller.Plan = Controller.Plan()
+
+    @model_validator(mode='before')
+    def check_state_type(cls, values:dict):
+        state_data = values.get('state')
+        if isinstance(state_data, dict):
+            type_map = {
+                'Null':cls.Controller.Null,
+                'Plan':cls.Controller.Plan,
+                'Order':cls.Controller.Order,
+                'Position':cls.Controller.Position,
+            }
+            state_class = type_map.get(state_data.get('type', 'NULL'), cls.Controller.Null)
+            values['state'] = state_class(**state_data)
+        return values
+    
+    state: Controller.Null = Controller.Plan()
     symbol: str = ''
     sl: float = 0.0
     tp: float = 0.0
