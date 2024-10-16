@@ -50,26 +50,38 @@ class CeleryTask:
     @staticmethod
     @celery_app.task(bind=True)
     def book_send(t:Task,acc:MT5Account,book:Book):
-        ba = BookAction(acc,book.as_plan()).change_run('send',{})
-        return MT5Manager().get_singleton().do(ba)
+        ba = BookAction(acc,Book(**book).as_plan()).change_run('send',{})
+        res = MT5Manager().get_singleton().do(ba)
+        if hasattr(res,'model_dump'):
+            res = res.model_dump()
+        return res
 
     @staticmethod
     @celery_app.task(bind=True)
     def book_close(t:Task,acc:MT5Account,book:Book):
         ba = BookAction(acc,book).change_run('close',{})
-        return MT5Manager().get_singleton().do(ba)
+        res = MT5Manager().get_singleton().do(ba)
+        if hasattr(res,'model_dump'):
+            res = res.model_dump()
+        return res
 
     @staticmethod
     @celery_app.task(bind=True)
     def book_changeP(t:Task,acc:MT5Account,book:Book,p):
         ba = BookAction(acc,book).change_run('close',dict(p=p))
-        return MT5Manager().get_singleton().do(ba)
+        res = MT5Manager().get_singleton().do(ba)
+        if hasattr(res,'model_dump'):
+            res = res.model_dump()
+        return res
 
     @staticmethod
     @celery_app.task(bind=True)
     def book_changeTS(t:Task,acc:MT5Account,book:Book,tp,sl):
         ba = BookAction(acc,book).change_run('changeTS',dict(tp=tp,sl=sl))
-        return MT5Manager().get_singleton().do(ba)
+        res = MT5Manager().get_singleton().do(ba)
+        if hasattr(res,'model_dump'):
+            res = res.model_dump()
+        return res
 
 
 ######################################### Create FastAPI app instance

@@ -1,50 +1,96 @@
-import pytest
-from fastapi.testclient import TestClient
-from tasks import RESTapi, MT5Account, Book
+import time
+import requests
 
-# Initialize TestClient with your FastAPI app
-client = TestClient(RESTapi.api)
+from Manager import Book
 
-def test_add_terminal():
-    response = client.post("/terminals/add", params={"broker": "mock_broker", "path": "/mock/path"})
-    assert response.status_code == 200
-    assert response.json() == {"status": "Terminal added"}
+# Define the base URL of your API
+BASE_URL = "http://localhost:8000"  # Replace with your actual API URL
 
-def test_get_books(mock_account):
-    response = client.post("/books/", json=mock_account.model_dump())
-    assert response.status_code == 200
-    assert "task_id" in response.json()
+# Helper function to raise error with custom message
+def raise_error(response, expected_status):
+    if response.status_code != expected_status:
+        raise AssertionError(f"Expected status code {expected_status}, got {response.status_code}: {response.text}")
 
-def test_account_info(mock_account):
-    response = client.post("/account/info", json=mock_account.model_dump())
-    assert response.status_code == 200
-    assert "task_id" in response.json()
+# Test adding a terminal
+def test_add_terminal(broker, path):
+    response = requests.post(f"{BASE_URL}/terminals/add", params={"broker": broker, "path": path})
+    time.sleep(1)
+    print(requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json())
+    raise_error(response, 200)
+    print("test_add_terminal passed")
 
-def test_book_send(mock_account, mock_book):
-    response = client.post("/books/send", json={"acc": mock_account.model_dump(), "book": mock_book.model_dump()})
-    assert response.status_code == 200
-    assert "task_id" in response.json()
+# Test listing all terminals
+def test_list_terminals():
+    response = requests.get(f"{BASE_URL}/terminals/")
+    time.sleep(1)
+    print(response.json())
+    raise_error(response, 200)
+    terminals = response.json()
+    assert isinstance(terminals, dict), "Expected a dictionary of terminals"
+    print("test_list_terminals passed")
 
-def test_book_close(mock_account, mock_book):
-    response = client.post("/books/close", json={"acc": mock_account.model_dump(), "book": mock_book.model_dump()})
-    assert response.status_code == 200
-    assert "task_id" in response.json()
+# Test getting books for an account
+def test_get_books(account):
+    response = requests.post(f"{BASE_URL}/books/", json=account)
+    time.sleep(1)
+    print(requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json())
+    raise_error(response, 200)
+    print("test_get_books passed")
 
-def test_book_change_price(mock_account, mock_book):
-    response = client.post("/books/change-price", json={"acc": mock_account.model_dump(), "book": mock_book.model_dump(), "p": 1.2500})
-    assert response.status_code == 200
-    assert "task_id" in response.json()
+# Test fetching account info
+def test_account_info(account):
+    response = requests.post(f"{BASE_URL}/account/info", json=account)
+    time.sleep(1)
+    print(requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json())
+    raise_error(response, 200)
+    print("test_account_info passed")
 
-def test_book_change_trailing_stop(mock_account, mock_book):
-    response = client.post("/books/change-trailing-stop", json={"acc": mock_account.model_dump(), "book": mock_book.model_dump(), "tp": 1.2600, "sl": 1.2200})
-    assert response.status_code == 200
-    assert "task_id" in response.json()
+# Test sending a book
+def test_book_send(account, book):
+    response = requests.post(f"{BASE_URL}/books/send", json={"acc": account, "book": book})
+    time.sleep(1)
+    print(requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json())
+    raise_error(response, 200)
+    print("test_book_send passed")
 
-def test_task_status():
-    # Assuming you have an existing task_id for testing
-    task_id = "mock_task_id"
-    response = client.get(f"/tasks/status/{task_id}")
-    assert response.status_code == 200
-    assert "task_id" in response.json()
-    assert "status" in response.json()
-    assert "result" in response.json()
+# Test closing a book
+def test_book_close(account, book):
+    response = requests.post(f"{BASE_URL}/books/close", json={"acc": account, "book": book})
+    time.sleep(1)
+    print(requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json())
+    raise_error(response, 200)
+    print("test_book_close passed")
+
+# Test changing the price of a book
+def test_book_change_price(account, book, price):
+    response = requests.post(f"{BASE_URL}/books/change-price", json={"acc": account, "book": book, "p": price})
+    time.sleep(1)
+    print(requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json())
+    raise_error(response, 200)
+    print("test_book_change_price passed")
+
+# Test changing tp and sl values of a book
+def test_book_change_tp_sl(account, book, tp, sl):
+    response = requests.post(f"{BASE_URL}/books/change-tp-sl", json={"acc": account, "book": book, "tp": tp, "sl": sl})
+    time.sleep(1)
+    print(requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json())
+    raise_error(response, 200)
+    print("test_book_change_tp_sl passed")
+
+# Run the tests with specific data
+# if __name__ == "__main__":
+#     # Example data for the tests
+#     test_broker = "test_broker"
+#     test_path = "/path/to/terminal"
+#     test_account = {"id": 123456, "balance": 1000.0}
+    # test_book = Book(symbol='',price_open = 100.0,volume= 0.01)
+    
+#     # Execute the tests with provided data
+#     test_add_terminal(test_broker, test_path)
+#     test_list_terminals()
+#     test_get_books(test_account.model_dump())
+#     test_account_info(test_account.model_dump())
+    # test_book_send(test_account.model_dump(), test_book.model_dump())
+    # test_book_close(test_account.model_dump(), test_book.model_dump())
+    # test_book_change_price(test_account.model_dump(), test_book.model_dump(), 150.0)
+    # test_book_change_tp_sl(test_account.model_dump(), test_book.model_dump(), 200.0, 50.0)

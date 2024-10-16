@@ -391,11 +391,12 @@ class Book(BaseModel):
     
 class BookAction(MT5Action):
     def __init__(self, account: MT5Account, book: Book, retry_times_on_error=3) -> None:
-        super().__init__(account, retry_times_on_error)
-        if type(acc) is dict:
-            acc = MT5Account(**acc)
+        if type(account) is dict:
+            account = MT5Account(**account)
         if type(book) is dict:
             book = Book(**book)
+            
+        super().__init__(account, retry_times_on_error)
         self.book = book
 
     def change_run(self, func_name, kwargs):
