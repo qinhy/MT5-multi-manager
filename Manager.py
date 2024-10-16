@@ -213,16 +213,16 @@ class Book(BaseModel):
     
     state: Controller.Null = Controller.Plan()
     symbol: str = ''
-    sl: float = 0.0
-    tp: float = 0.0
-    price_open: float = 0.0
-    volume: float = 0.0
+    sl: float = -1.0
+    tp: float = -1.0
+    price_open: float = -1.0
+    volume: float = -1.0
     magic:int = 901000
-    ticket: int = 0
+    ticket: int = -1
+    is_order: bool = False
+    is_position: bool = False
 
     _book: Any = None# mt5_order_position
-    _is_order: bool = False
-    _is_position: bool = False
     _type: str = ''
     _swap: int = 0
 
@@ -262,21 +262,21 @@ class Book(BaseModel):
         self.price_open = self._book.price_open
         self.ticket = self._book.ticket
         self._type = self._book.type
-        self._is_order=False
-        self._is_position=False
+        self.is_order=False
+        self.is_position=False
         self._swap = 0
         
         if self._book.__class__.__name__ == "TradeOrder" : 
-            self._is_order=True
+            self.is_order=True
             self.state = Book.Controller.Order()
         elif self._book.__class__.__name__ == "TradePosition": 
-            self._is_position=True
+            self.is_position=True
             self.state = Book.Controller.Position()
         if hasattr(self._book,'volume_current'):
-            self._is_order=True
+            self.is_order=True
             self.volume=self._book.volume_current
         elif hasattr(self._book,'volume'):
-            self._is_position=True
+            self.is_position=True
             self.volume=self._book.volume
             self._swap = self._book.swap
         else:
@@ -286,24 +286,22 @@ class Book(BaseModel):
         return self
 
     def isBuy(self):
-        if self._is_order: 
+        if self.is_order: 
                 return self._type in [mt5.ORDER_TYPE_BUY,mt5.ORDER_TYPE_BUY_LIMIT ,
                                       mt5.ORDER_TYPE_BUY_STOP ,mt5.ORDER_TYPE_BUY_STOP_LIMIT]
-        elif self._is_position: 
+        elif self.is_position: 
                 return self._type == mt5.POSITION_TYPE_BUY
         return True
     
     def _sendRequest(self, request):    
         result=mt5.order_send(request)
-        print(result)
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-            print('send request failed',result)
-            return False
+            raise ValueError(f'Send request failed: {result}')
+            # return False
         
         if result.__class__.__name__ == "OrderSendResult" :
             self.ticket = result.order
-            self.price_open = result.price
-            self._is_order=True
+            self.is_order=True
             self.state = Book.Controller.Order()
 
         return True
@@ -316,6 +314,7 @@ class Book(BaseModel):
             "tp": tp,
             "sl": sl
         }
+        print(request)
         return self._sendRequest(request)
 
     def _changePositionTPSL(self, tp=0.0,sl=0.0):
@@ -326,12 +325,13 @@ class Book(BaseModel):
             "tp": tp,
             "sl": sl
         }
+        print(request)
         return self._sendRequest(request)
 
     def _changeTPSL(self, tp=0.0,sl=0.0):
-        if self._is_order: 
+        if self.is_order: 
             return self._changeOrderTPSL(tp,sl)
-        elif self._is_position: 
+        elif self.is_position: 
             return self._changePositionTPSL(tp,sl)
         return False
     
