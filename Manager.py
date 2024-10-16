@@ -29,27 +29,22 @@ class MT5Action:
         return self
 
     def run_action(self):
-        try:
-            res = self.run()
-            self.on_end(res)
-            return res
-        except Exception as e:
-            print(f"Error occurred: {e}")
-            return self._handle_error(e)
+        while self.retry_times_on_error > 1:
+            try:
+                res = self.run()
+                self.on_end(res)
+                return res
+            except Exception as e:
+                print(f"Error occurred: {e}")
+                self.retry_times_on_error -= 1
+                time.sleep(1)
+        
+        res = self.run()
+        self.on_end(res)
+        return res
 
     def run(self):
         print("Executing action with MT5")
-
-    def on_error(self, e):
-        print(f"Handling error: {e}")
-
-    def _handle_error(self, e):
-        if self.retry_times_on_error > 0:
-            self.retry_times_on_error -= 1
-            time.sleep(1)
-            return self.run_action()
-        else:
-            self.on_error(e)
 
     def on_end(self, res):
         print("Action completed successfully")
@@ -104,42 +99,48 @@ class MT5Manager:
         if len(t_locks)==0:
             raise ValueError('The broker is not supported!')
         return random.choice(list(t_locks))
-
+    
     def do(self, action: MT5Action):
         terminal_lock = self._get_terminal_lock(action._account.account_server)
+        
         try:
             terminal_lock.acquire()
+            
+            # Initialize the MT5 terminal
             if not mt5.initialize(path=terminal_lock.exe_path):
                 raise ValueError(f"Failed to initialize MT5 for executable path: {terminal_lock.exe_path}")
-
-            if not action._account:
-                raise ValueError('_account is not set')
-            action._account.is_valid()
+            
+            # Validate account information
             account = action._account
-
-            current = mt5.account_info()
-            if not str(current.login)!=str(account.account_id):
+            if not account:
+                raise ValueError('_account is not set')
+            account.is_valid()
+            
+            # Check if we are already logged in with the correct account
+            current_account = mt5.account_info()
+            if str(current_account.login) != str(account.account_id):
                 if not mt5.login(account.account_id, password=account.password, server=account.account_server):
                     raise ValueError(f"Failed to log in with account ID: {account.account_id}")
-
+            
+            # Execute the action and store the result
             if action.uuid not in self.results:
                 self.results[action.uuid] = []
-            self.results[action.uuid].append(action.run_action())
+            
+            action_result = action.run_action()
+            self.results[action.uuid].append(action_result)
+            
+            return action_result
+
+        except Exception as e:
+            print( e)
+
         finally:
-            # mt5.shutdown()  # Ensure shutdown is called even if an error occurs
             terminal_lock.release()
-            res = self.results.get(action.uuid, [])
-            return res[-1] if res else None
+
+            
 
 class Book(BaseModel):
-    class Controller(BaseModel):        
-        @staticmethod
-        def _try(func):
-            try:
-                return func()
-            except Exception as e:
-                print(e)
-                return False
+    class Controller(BaseModel):
 
         class Null(BaseModel):
             type:str = 'Null'
@@ -156,7 +157,7 @@ class Book(BaseModel):
             type:str = 'Plan'
             def send(self,book):
                 book:Book = book
-                res = Book.Controller._try(lambda:book._make_order())
+                res = book._make_order()
                 book.state = Book.Controller.Order() if res else Book.Controller.Plan()
             def close(self,book):
                 raise ValueError('This is just a Plan')
@@ -173,13 +174,13 @@ class Book(BaseModel):
                 raise ValueError('This is a exists Order')
             def close(self,book):
                 book:Book = book
-                res = Book.Controller._try(lambda:book._close_order())
+                res = book._close_order()
                 if res : book.state = Book.Controller.Null()
             def changeP(self,book,p):
                 raise ValueError('This is a exists Order, You can close it.')
             def changeTS(self,book,tp,sl):
                 book:Book = book
-                res = Book.Controller._try(lambda:book._changeOrderTPSL(tp,sl))
+                res = book._changeOrderTPSL(tp,sl)
                 if res : book.tp,book.sl=tp,sl
 
         class Position(Null):
@@ -188,13 +189,13 @@ class Book(BaseModel):
                 raise ValueError('This is a exists Position')
             def close(self,book):
                 book:Book = book
-                res = Book.Controller._try(lambda:book._close_position())
+                res = book._close_position()
                 if res : book.state = Book.Controller.Null()
             def changeP(self,book,p):
                 raise ValueError('This is a exists Position, can not change price open')
             def changeTS(self,book,tp,sl):
                 book:Book = book
-                res = Book.Controller._try(lambda:book._changePositionTPSL(tp,sl))
+                res = book._changePositionTPSL(tp,sl)
                 if res : book.tp,book.sl=tp,sl
 
     @model_validator(mode='before')
@@ -325,7 +326,6 @@ class Book(BaseModel):
             "tp": tp,
             "sl": sl
         }
-        print(request)
         return self._sendRequest(request)
 
     def _changeTPSL(self, tp=0.0,sl=0.0):
