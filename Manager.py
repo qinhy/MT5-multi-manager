@@ -5,34 +5,16 @@ import uuid
 from typing import Any, Dict, List
 
 import MetaTrader5 as mt5
-from pydantic import BaseModel, SecretStr, field_validator
+from pydantic import BaseModel, model_validator
 
 
 class MT5Account(BaseModel):
     account_id: int = None  # for @mt5_class_operation
-    password: SecretStr = SecretStr('')  # for @mt5_class_operation
-    account_server: SecretStr = SecretStr('')  # for @mt5_class_operation
-
-    @field_validator("account_id")
-    def validate_account_id(cls, account_id:int):
-        if account_id is None:
-            raise ValueError("Account ID is not set")
-        return account_id
-
-    @field_validator("password")
-    def validate_password(cls, password:SecretStr):
-        if not password.get_secret_value():
-            raise ValueError("Password is not set")
-        return password
-
-    @field_validator("account_server")
-    def validate_account_server(cls, account_server:SecretStr):
-        if not account_server.get_secret_value():
-            raise ValueError("Account server is not set")
-        return account_server
+    password: str = ''
+    account_server: str = ''
 
     def is_valid(self):
-        return True
+        return self.account_id is None or self.password=='' or self.account_server==''
 
 class MT5Action:
     def __init__(self, account: MT5Account, retry_times_on_error=3) -> None:
@@ -42,8 +24,8 @@ class MT5Action:
 
     def set_account(self, account_id, password, account_server):
         self._account.account_id = account_id
-        self._account.password = SecretStr(password)
-        self._account.account_server = SecretStr(account_server)
+        self._account.password = password
+        self._account.account_server = account_server
         return self
 
     def run_action(self):
@@ -73,41 +55,58 @@ class MT5Action:
         print("Action completed successfully")
 
 class MT5Manager:
+    # statics for singleton
+    _uuid = uuid.uuid4()
+    _results:Dict[str,List[Any]] = {}
+    _terminals:Dict[str,set] = {}
+    _is_singleton = True
+    _meta = {}
+
     class TerminalLock:
-        def __init__(self, exe_path="path/to/your/terminal64.exe"):
-            self.exe_path = exe_path
+        def __init__(self,exe_path="path/to/your/terminal64.exe"):
+            self.exe_path=exe_path
             self._lock = Lock()
-
         def acquire(self):
+            # print("acquired", self)
             self._lock.acquire()
-
         def release(self):
+            # print("released", self)
             self._lock.release()
-
         def __enter__(self):
             self.acquire()
-
         def __exit__(self, type, value, traceback):
             self.release()
 
-    def __init__(self) -> None:
-        self.results: Dict[str, List[Any]] = {}
-        self.terminals: Dict[str, List[MT5Manager.TerminalLock]] = {}
+        
+    def __init__(self,id=None,results=None,terminals=None,is_singleton=None):
+        self.uuid = uuid.uuid4() if id is None else id
+        self.results:Dict[str,List[Any]] = None if results is None else results
+        self.terminals:Dict[str,set[MT5Manager.TerminalLock]] = None if terminals is None else terminals
+        self.is_singleton:bool = False if is_singleton is None else is_singleton
+    # {
+    #     'TitanFX':[
+    #         MT5Manager.TerminalLock(exe_path="path/to/your/terminal64.exe")
+    #     ],
+    #     'XMTrading':[ MT5Manager.TerminalLock(exe_path="path/to/your/terminal64.exe") ],
+    # }
+    
+    def get_singleton(self):
+        return self.__class__(self._uuid,self._results,self._terminals,self._is_singleton)
 
     def add_terminal(self, account_server='XMTrading', exe_path="path/to/your/terminal64.exe"):
         if account_server not in self.terminals:
-            self.terminals[account_server] = []
-        self.terminals[account_server].append(MT5Manager.TerminalLock(exe_path=exe_path))
+            self.terminals[account_server] = set()
+        self.terminals[account_server].add(MT5Manager.TerminalLock(exe_path=exe_path))
 
     def _get_terminal_lock(self, account_server='XMTrading'):
         broker = account_server.split('-')[0]
-        t_locks = self.terminals.get(broker, [])
-        if not t_locks:
+        t_locks = self.terminals.get(broker, set())
+        if len(t_locks)==0:
             raise ValueError('The broker is not supported!')
-        return random.choice(t_locks)
+        return random.choice(list(t_locks))
 
     def do(self, action: MT5Action):
-        terminal_lock = self._get_terminal_lock(action._account.account_server.get_secret_value())
+        terminal_lock = self._get_terminal_lock(action._account.account_server)
         try:
             terminal_lock.acquire()
             if not mt5.initialize(path=terminal_lock.exe_path):
@@ -118,14 +117,16 @@ class MT5Manager:
             action._account.is_valid()
             account = action._account
 
-            if not mt5.login(account.account_id, password=account.password.get_secret_value(), server=account.account_server.get_secret_value()):
-                raise ValueError(f"Failed to log in with account ID: {account.account_id}")
+            current = mt5.account_info()
+            if not str(current.login)!=str(account.account_id):
+                if not mt5.login(account.account_id, password=account.password, server=account.account_server):
+                    raise ValueError(f"Failed to log in with account ID: {account.account_id}")
 
             if action.uuid not in self.results:
                 self.results[action.uuid] = []
             self.results[action.uuid].append(action.run_action())
         finally:
-            mt5.shutdown()  # Ensure shutdown is called even if an error occurs
+            # mt5.shutdown()  # Ensure shutdown is called even if an error occurs
             terminal_lock.release()
             res = self.results.get(action.uuid, [])
             return res[-1] if res else None
@@ -151,7 +152,7 @@ class Book(BaseModel):
             def changeTS(self,book,tp,sl):
                 raise ValueError(f'This is a {self.type} state')
 
-        class Plan(BaseModel):
+        class Plan(Null):
             type:str = 'Plan'
             def send(self,book):
                 book:Book = book
@@ -166,7 +167,7 @@ class Book(BaseModel):
                 book:Book = book
                 book.tp,book.sl=tp,sl
             
-        class Order(BaseModel):
+        class Order(Null):
             type:str = 'Order'
             def send(self,book):
                 raise ValueError('This is a exists Order')
@@ -181,7 +182,7 @@ class Book(BaseModel):
                 res = Book.Controller._try(lambda:book._changeOrderTPSL(tp,sl))
                 if res : book.tp,book.sl=tp,sl
 
-        class Position(BaseModel):
+        class Position(Null):
             type:str = 'Position'
             def send(self,book):
                 raise ValueError('This is a exists Position')
@@ -195,19 +196,33 @@ class Book(BaseModel):
                 book:Book = book
                 res = Book.Controller._try(lambda:book._changePositionTPSL(tp,sl))
                 if res : book.tp,book.sl=tp,sl
-            
-    state: Controller.Plan = Controller.Plan()
+
+    @model_validator(mode='before')
+    def check_state_type(cls, values:dict):
+        state_data = values.get('state')
+        if isinstance(state_data, dict):
+            type_map = {
+                'Null':cls.Controller.Null,
+                'Plan':cls.Controller.Plan,
+                'Order':cls.Controller.Order,
+                'Position':cls.Controller.Position,
+            }
+            state_class = type_map.get(state_data.get('type', 'NULL'), cls.Controller.Null)
+            values['state'] = state_class(**state_data)
+        return values
+    
+    state: Controller.Null = Controller.Plan()
     symbol: str = ''
-    sl: float = 0.0
-    tp: float = 0.0
-    price_open: float = 0.0
-    volume: float = 0.0
+    sl: float = -1.0
+    tp: float = -1.0
+    price_open: float = -1.0
+    volume: float = -1.0
     magic:int = 901000
+    ticket: int = -1
+    is_order: bool = False
+    is_position: bool = False
 
     _book: Any = None# mt5_order_position
-    _is_order: bool = False
-    _is_position: bool = False
-    _ticket: int = 0
     _type: str = ''
     _swap: int = 0
 
@@ -245,23 +260,23 @@ class Book(BaseModel):
         self.sl = self._book.sl
         self.tp = self._book.tp
         self.price_open = self._book.price_open
-        self._ticket = self._book.ticket
+        self.ticket = self._book.ticket
         self._type = self._book.type
-        self._is_order=False
-        self._is_position=False
+        self.is_order=False
+        self.is_position=False
         self._swap = 0
         
         if self._book.__class__.__name__ == "TradeOrder" : 
-            self._is_order=True
+            self.is_order=True
             self.state = Book.Controller.Order()
         elif self._book.__class__.__name__ == "TradePosition": 
-            self._is_position=True
+            self.is_position=True
             self.state = Book.Controller.Position()
         if hasattr(self._book,'volume_current'):
-            self._is_order=True
+            self.is_order=True
             self.volume=self._book.volume_current
         elif hasattr(self._book,'volume'):
-            self._is_position=True
+            self.is_position=True
             self.volume=self._book.volume
             self._swap = self._book.swap
         else:
@@ -271,44 +286,52 @@ class Book(BaseModel):
         return self
 
     def isBuy(self):
-        if self._is_order: 
+        if self.is_order: 
                 return self._type in [mt5.ORDER_TYPE_BUY,mt5.ORDER_TYPE_BUY_LIMIT ,
                                       mt5.ORDER_TYPE_BUY_STOP ,mt5.ORDER_TYPE_BUY_STOP_LIMIT]
-        elif self._is_position: 
+        elif self.is_position: 
                 return self._type == mt5.POSITION_TYPE_BUY
         return True
     
     def _sendRequest(self, request):    
-        result=mt5.order_send(request)    
+        result=mt5.order_send(request)
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-            print('send request failed',result)
-            return False
+            raise ValueError(f'Send request failed: {result}')
+            # return False
+        
+        if result.__class__.__name__ == "OrderSendResult" :
+            self.ticket = result.order
+            self.is_order=True
+            self.state = Book.Controller.Order()
+
         return True
 
     def _changeOrderTPSL(self, tp=0.0,sl=0.0):
         request = {
             "action": mt5.TRADE_ACTION_MODIFY,
-            "order": self._ticket,
+            "order": self.ticket,
             "price": self.price_open,
             "tp": tp,
             "sl": sl
         }
+        print(request)
         return self._sendRequest(request)
 
     def _changePositionTPSL(self, tp=0.0,sl=0.0):
         request = {
             "action": mt5.TRADE_ACTION_SLTP,
-            "position": self._ticket,
+            "position": self.ticket,
             "symbol": self.symbol,
             "tp": tp,
             "sl": sl
         }
+        print(request)
         return self._sendRequest(request)
 
     def _changeTPSL(self, tp=0.0,sl=0.0):
-        if self._is_order: 
+        if self.is_order: 
             return self._changeOrderTPSL(tp,sl)
-        elif self._is_position: 
+        elif self.is_position: 
             return self._changePositionTPSL(tp,sl)
         return False
     
@@ -329,7 +352,7 @@ class Book(BaseModel):
             "symbol": self.symbol,
             "volume": self.volume,
             "type": type_tmp,
-            "position": self._ticket,
+            "position": self.ticket,
             "price": price,
             "deviation": deviation,
             "magic": self.magic,
@@ -343,7 +366,7 @@ class Book(BaseModel):
         #https://www.mql5.com/en/forum/365968
         request = {
             "action": mt5.TRADE_ACTION_REMOVE,
-            "order": self._ticket,
+            "order": self.ticket,
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
@@ -390,6 +413,11 @@ class Book(BaseModel):
     
 class BookAction(MT5Action):
     def __init__(self, account: MT5Account, book: Book, retry_times_on_error=3) -> None:
+        if type(account) is dict:
+            account = MT5Account(**account)
+        if type(book) is dict:
+            book = Book(**book)
+            
         super().__init__(account, retry_times_on_error)
         self.book = book
 

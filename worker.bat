@@ -1,1 +1,0 @@
-python -m celery -A tasks.celery_app worker -l info --concurrency=1 -P threads
