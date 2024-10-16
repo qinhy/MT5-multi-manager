@@ -1,11 +1,13 @@
 from threading import Lock
 import random
 import time
+from typing_extensions import Unpack
 import uuid
 from typing import Any, Dict, List
 
 import MetaTrader5 as mt5
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
+
 
 class MT5Account(BaseModel):
     account_id: int = None  # for @mt5_class_operation
@@ -39,16 +41,15 @@ class MT5Action:
     def run(self):
         print("Executing action with MT5")
 
-    def on_error(self, e):
-        print(f"Handling error: {e}")
+    # def on_error(self, e):
+    #     raise e
 
     def _handle_error(self, e):
-        if self.retry_times_on_error > 0:
+        if self.retry_times_on_error > 1:
             self.retry_times_on_error -= 1
             time.sleep(1)
             return self.run_action()
-        else:
-            self.on_error(e)
+        return self.run()
 
     def on_end(self, res):
         print("Action completed successfully")
@@ -131,14 +132,7 @@ class MT5Manager:
             return res[-1] if res else None
 
 class Book(BaseModel):
-    class Controller(BaseModel):        
-        @staticmethod
-        def _try(func):
-            try:
-                return func()
-            except Exception as e:
-                print(e)
-                return False
+    class Controller(BaseModel):
 
         class Null(BaseModel):
             type:str = 'Null'
@@ -155,7 +149,7 @@ class Book(BaseModel):
             type:str = 'Plan'
             def send(self,book):
                 book:Book = book
-                res = Book.Controller._try(lambda:book._make_order())
+                res = book._make_order()
                 book.state = Book.Controller.Order() if res else Book.Controller.Plan()
             def close(self,book):
                 raise ValueError('This is just a Plan')
@@ -172,13 +166,13 @@ class Book(BaseModel):
                 raise ValueError('This is a exists Order')
             def close(self,book):
                 book:Book = book
-                res = Book.Controller._try(lambda:book._close_order())
+                res = book._close_order()
                 if res : book.state = Book.Controller.Null()
             def changeP(self,book,p):
                 raise ValueError('This is a exists Order, You can close it.')
             def changeTS(self,book,tp,sl):
                 book:Book = book
-                res = Book.Controller._try(lambda:book._changeOrderTPSL(tp,sl))
+                res = book._changeOrderTPSL(tp,sl)
                 if res : book.tp,book.sl=tp,sl
 
         class Position(Null):
@@ -187,13 +181,13 @@ class Book(BaseModel):
                 raise ValueError('This is a exists Position')
             def close(self,book):
                 book:Book = book
-                res = Book.Controller._try(lambda:book._close_position())
+                res = book._close_position()
                 if res : book.state = Book.Controller.Null()
             def changeP(self,book,p):
                 raise ValueError('This is a exists Position, can not change price open')
             def changeTS(self,book,tp,sl):
                 book:Book = book
-                res = Book.Controller._try(lambda:book._changePositionTPSL(tp,sl))
+                res = book._changePositionTPSL(tp,sl)
                 if res : book.tp,book.sl=tp,sl
 
     @model_validator(mode='before')
