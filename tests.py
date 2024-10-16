@@ -72,7 +72,7 @@ def test_book_close(account, book):
 
 # Test changing the price of a book
 def test_book_change_price(account, book, price):
-    response = requests.post(f"{BASE_URL}/books/change-price", json={"acc": account, "book": book, "p": price})
+    response = requests.post(f"{BASE_URL}/books/change-price", json={"acc": account, "book": book}, params={"p": price})
     time.sleep(1)
     res = requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json()
     print(res)
@@ -82,7 +82,7 @@ def test_book_change_price(account, book, price):
 
 # Test changing tp and sl values of a book
 def test_book_change_tp_sl(account, book, tp, sl):
-    response = requests.post(f"{BASE_URL}/books/change-tp-sl", json={"acc": account, "book": book, "tp": tp, "sl": sl})
+    response = requests.post(f"{BASE_URL}/books/change-tp-sl", json={"acc": account, "book": book}, params={"tp": tp, "sl": sl})
     time.sleep(1)
     res = requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json()
     print(res)
@@ -96,14 +96,16 @@ def test_book_change_tp_sl(account, book, tp, sl):
 #     test_broker = "test_broker"
 #     test_path = "/path/to/terminal"
 #     test_account = {"id": 123456, "balance": 1000.0}
-    # test_book = Book(symbol='',price_open = 100.0,volume= 0.01)
     
 #     # Execute the tests with provided data
 #     test_add_terminal(test_broker, test_path)
 #     test_list_terminals()
 #     test_get_books(test_account.model_dump())
 #     test_account_info(test_account.model_dump())
-    # test_book_send(test_account.model_dump(), test_book.model_dump())
-    # test_book_close(test_account.model_dump(), test_book.model_dump())
-    # test_book_change_price(test_account.model_dump(), test_book.model_dump(), 150.0)
-    # test_book_change_tp_sl(test_account.model_dump(), test_book.model_dump(), 200.0, 50.0)
+
+#     test_book = Book(symbol='',price_open = 100.0,volume= 0.01)
+#     res = test_book_send(test_account.model_dump(), test_book.model_dump())
+#     test_book2 = Book(**res)
+#     res = test_book_change_price(test_account.model_dump(), test_book2.model_dump(), 50.0)
+#     res = test_book_change_tp_sl(test_account.model_dump(), test_book2.model_dump(), 200.0, 51.0)
+#     res = test_book_close(test_account.model_dump(), test_book2.model_dump())

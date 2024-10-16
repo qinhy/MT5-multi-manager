@@ -4,7 +4,7 @@ import time
 import uuid
 from typing import Any, Dict, List
 
-# import MetaTrader5 as mt5
+import MetaTrader5 as mt5
 from pydantic import BaseModel
 
 
@@ -126,7 +126,7 @@ class MT5Manager:
                 self.results[action.uuid] = []
             self.results[action.uuid].append(action.run_action())
         finally:
-            mt5.shutdown()  # Ensure shutdown is called even if an error occurs
+            # mt5.shutdown()  # Ensure shutdown is called even if an error occurs
             terminal_lock.release()
             res = self.results.get(action.uuid, [])
             return res[-1] if res else None
