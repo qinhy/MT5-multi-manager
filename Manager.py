@@ -4,7 +4,7 @@ import time
 import uuid
 from typing import Any, Dict, List
 
-import MetaTrader5 as mt5
+# import MetaTrader5 as mt5
 from pydantic import BaseModel
 
 
@@ -285,6 +285,13 @@ class Book(BaseModel):
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
             print('send request failed',result)
             return False
+        
+        if result.__class__.__name__ == "OrderSendResult" :
+            self.ticket = result.order
+            self.price_open = result.price
+            self._is_order=True
+            self.state = Book.Controller.Order()
+
         return True
 
     def _changeOrderTPSL(self, tp=0.0,sl=0.0):
