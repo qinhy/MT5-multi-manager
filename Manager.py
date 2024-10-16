@@ -7,7 +7,6 @@ from typing import Any, Dict, List
 import MetaTrader5 as mt5
 from pydantic import BaseModel, model_validator
 
-
 class MT5Account(BaseModel):
     account_id: int = None  # for @mt5_class_operation
     password: str = ''
