@@ -280,7 +280,8 @@ class Book(BaseModel):
         return True
     
     def _sendRequest(self, request):    
-        result=mt5.order_send(request)    
+        result=mt5.order_send(request)
+        print(result)
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
             print('send request failed',result)
             return False
