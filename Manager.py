@@ -204,11 +204,11 @@ class Book(BaseModel):
     price_open: float = 0.0
     volume: float = 0.0
     magic:int = 901000
+    ticket: int = 0
 
     _book: Any = None# mt5_order_position
     _is_order: bool = False
     _is_position: bool = False
-    _ticket: int = 0
     _type: str = ''
     _swap: int = 0
 
@@ -246,7 +246,7 @@ class Book(BaseModel):
         self.sl = self._book.sl
         self.tp = self._book.tp
         self.price_open = self._book.price_open
-        self._ticket = self._book.ticket
+        self.ticket = self._book.ticket
         self._type = self._book.type
         self._is_order=False
         self._is_position=False
@@ -289,7 +289,7 @@ class Book(BaseModel):
     def _changeOrderTPSL(self, tp=0.0,sl=0.0):
         request = {
             "action": mt5.TRADE_ACTION_MODIFY,
-            "order": self._ticket,
+            "order": self.ticket,
             "price": self.price_open,
             "tp": tp,
             "sl": sl
@@ -299,7 +299,7 @@ class Book(BaseModel):
     def _changePositionTPSL(self, tp=0.0,sl=0.0):
         request = {
             "action": mt5.TRADE_ACTION_SLTP,
-            "position": self._ticket,
+            "position": self.ticket,
             "symbol": self.symbol,
             "tp": tp,
             "sl": sl
@@ -330,7 +330,7 @@ class Book(BaseModel):
             "symbol": self.symbol,
             "volume": self.volume,
             "type": type_tmp,
-            "position": self._ticket,
+            "position": self.ticket,
             "price": price,
             "deviation": deviation,
             "magic": self.magic,
@@ -344,7 +344,7 @@ class Book(BaseModel):
         #https://www.mql5.com/en/forum/365968
         request = {
             "action": mt5.TRADE_ACTION_REMOVE,
-            "order": self._ticket,
+            "order": self.ticket,
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
         }

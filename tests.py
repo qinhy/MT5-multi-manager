@@ -15,7 +15,8 @@ def raise_error(response, expected_status):
 def test_add_terminal(broker, path):
     response = requests.post(f"{BASE_URL}/terminals/add", params={"broker": broker, "path": path})
     time.sleep(1)
-    print(requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json())
+    res = requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json()
+    print(res)
     raise_error(response, 200)
     print("test_add_terminal passed")
 
@@ -33,49 +34,61 @@ def test_list_terminals():
 def test_get_books(account):
     response = requests.post(f"{BASE_URL}/books/", json=account)
     time.sleep(1)
-    print(requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json())
+    res = requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json()
+    print(res)
     raise_error(response, 200)
     print("test_get_books passed")
+    return res
 
 # Test fetching account info
 def test_account_info(account):
     response = requests.post(f"{BASE_URL}/account/info", json=account)
     time.sleep(1)
-    print(requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json())
+    res = requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json()
+    print(res)
     raise_error(response, 200)
     print("test_account_info passed")
+    return res
 
 # Test sending a book
 def test_book_send(account, book):
     response = requests.post(f"{BASE_URL}/books/send", json={"acc": account, "book": book})
     time.sleep(1)
-    print(requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json())
+    res = requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json()
+    print(res)
     raise_error(response, 200)
     print("test_book_send passed")
+    return res
 
 # Test closing a book
 def test_book_close(account, book):
     response = requests.post(f"{BASE_URL}/books/close", json={"acc": account, "book": book})
     time.sleep(1)
-    print(requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json())
+    res = requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json()
+    print(res)
     raise_error(response, 200)
     print("test_book_close passed")
+    return res
 
 # Test changing the price of a book
 def test_book_change_price(account, book, price):
     response = requests.post(f"{BASE_URL}/books/change-price", json={"acc": account, "book": book, "p": price})
     time.sleep(1)
-    print(requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json())
+    res = requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json()
+    print(res)
     raise_error(response, 200)
     print("test_book_change_price passed")
+    return res
 
 # Test changing tp and sl values of a book
 def test_book_change_tp_sl(account, book, tp, sl):
     response = requests.post(f"{BASE_URL}/books/change-tp-sl", json={"acc": account, "book": book, "tp": tp, "sl": sl})
     time.sleep(1)
-    print(requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json())
+    res = requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json()
+    print(res)
     raise_error(response, 200)
     print("test_book_change_tp_sl passed")
+    return res
 
 # Run the tests with specific data
 # if __name__ == "__main__":
