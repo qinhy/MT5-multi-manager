@@ -1,5 +1,6 @@
 
 import os
+import time
 from fastapi import FastAPI
 from pymongo import MongoClient
 from Manager import BookAction,MT5Manager,MT5Account,Book
@@ -11,7 +12,9 @@ from celery import Celery
 from celery.result import AsyncResult
 from celery.app import task as Task
 mongo_URL = 'mongodb://localhost:27017'
-celery_app = Celery('tasks', broker = 'amqp://localhost', backend = mongo_URL+'/tasks')
+# celery_app = Celery('tasks', broker = 'amqp://localhost', backend = mongo_URL+'/tasks')
+celery_app = Celery('tasks', broker = 'redis://localhost:6379/0', backend = 'redis://localhost:6379/0')
+
 # mt5manager = MT5Manager().get_singleton()
 # MT5Manager().get_singleton().add_terminal()    
 class CeleryTask:
@@ -151,3 +154,73 @@ class RESTapi:
         if res: del res['_id']
         return res
         # return {"task_id": task.id, "status": task.status, "result": task.result}
+
+
+class MockRESTapi:
+    api = FastAPI()
+
+    @staticmethod
+    @api.post("/terminals/add")
+    async def add_terminal(broker: str, path: str):
+        """Mock Endpoint to add a terminal to MT5."""
+        return {'task_id': 'mock_task_id'}
+
+    @staticmethod
+    @api.get("/terminals/")
+    async def get_terminals():
+        """Mock Endpoint to get list of terminals."""
+        terminals_mock = {
+            "broker1": ["path1.exe", "path2.exe"],
+            "broker2": ["path3.exe"]
+        }
+        return terminals_mock
+
+    @staticmethod
+    @api.post("/books/")
+    async def get_books(acc: MT5Account):
+        """Mock Endpoint to get books for a given MT5 account."""
+        return {'task_id': 'mock_task_id'}
+
+    @staticmethod
+    @api.post("/account/info")
+    async def account_info(acc: MT5Account):
+        """Mock Endpoint to fetch account information."""
+        return {'task_id': 'mock_task_id'}
+
+    @staticmethod
+    @api.post("/books/send")
+    async def book_send(acc: MT5Account, book: Book):
+        """Mock Endpoint to send a book."""
+        return {'task_id': 'mock_task_id'}
+
+    @staticmethod
+    @api.post("/books/close")
+    async def book_close(acc: MT5Account, book: Book):
+        """Mock Endpoint to close a book."""
+        return {'task_id': 'mock_task_id'}
+
+    @staticmethod
+    @api.post("/books/change-price")
+    async def book_change_price(acc: MT5Account, book: Book, p: float):
+        """Mock Endpoint to change the price of a book."""
+        return {'task_id': 'mock_task_id'}
+
+    @staticmethod
+    @api.post("/books/change-tp-sl")
+    async def book_change_tp_sl(acc: MT5Account, book: Book, tp: float, sl: float):
+        """Mock Endpoint to change TP/SL values of a book."""
+        return {'task_id': 'mock_task_id'}
+
+    @staticmethod
+    @api.get("/tasks/status/{task_id}")
+    async def task_status(task_id: str):
+        """Mock Endpoint to check the status of a task."""
+        # Simulate a database response for task status
+        
+        task_status_mock = {
+            "task_id": task_id,
+            "status": "SUCCESS",
+            "result": {"message": "Task completed successfully"}
+        }
+        time.sleep(1)
+        return task_status_mock

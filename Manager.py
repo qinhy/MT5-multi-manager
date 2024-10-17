@@ -3,8 +3,10 @@ import random
 import time
 import uuid
 from typing import Any, Dict, List
-
-import MetaTrader5 as mt5
+try:
+    import MetaTrader5 as mt5
+except Exception as e:
+    print(e)
 from pydantic import BaseModel, model_validator
 
 
