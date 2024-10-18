@@ -4,7 +4,7 @@ import random
 import time
 from fastapi import FastAPI
 from pymongo import MongoClient
-from Manager import BookAction,MT5Manager,MT5Account,Book
+from Manager import BookAction, MT5CopyLastRatesAction,MT5Manager,MT5Account,Book, MT5Rates
 
 ######################################### Celery connect to local rabbitmq and db sqlite backend
 os.environ.setdefault('CELERY_TASK_SERIALIZER', 'json')
@@ -83,6 +83,15 @@ class CeleryTask:
         ba = BookAction(acc,book).change_run('changeTS',dict(tp=tp,sl=sl))
         res = MT5Manager().get_singleton().do(ba)
         return book.model_dump()
+    
+    @staticmethod
+    @celery_app.task(bind=True)
+    def rates_copy(t:Task,acc:MT5Account,
+                   symbol:str,timeframe:str,count:int,debug:bool=False):
+        ba = MT5CopyLastRatesAction(acc)
+        rates:MT5Rates = MT5Manager().get_singleton().do(ba,
+                    symbol=symbol,timeframe=timeframe,count=count,debug=debug)
+        return rates.model_dump()
 
 
 ######################################### Create FastAPI app instance
