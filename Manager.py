@@ -139,7 +139,7 @@ class MT5Manager:
         finally:
             terminal_lock.release()
 
-            
+
 
 class Book(BaseModel):
     class Controller(BaseModel):
@@ -413,6 +413,19 @@ class Book(BaseModel):
         }
         return self._sendRequest(request)
     
+
+class ServiceOrientedArchitecture:
+    class Model(BaseModel):
+        class Param(BaseModel):
+            pass
+        class Args(BaseModel):
+            pass
+        class Return(BaseModel):
+            pass
+    class Action(MT5Action):
+        def __call__(self, *args, **kwargs):
+            return ServiceOrientedArchitecture.Model.Return()
+
 class BookAction(MT5Action):
     def __init__(self, account: MT5Account, book: Book, retry_times_on_error=3) -> None:
         if type(account) is dict:
@@ -430,7 +443,43 @@ class BookAction(MT5Action):
     def run(self):
         # tbs = {f'{b.symbol}-{b.price_open}-{b.volume}':b.model_dump() for b in Book().getBooks()}
         return self.book_run()
-    
+
+
+class BookService(ServiceOrientedArchitecture):
+    class Model(BaseModel):
+        class Param(BaseModel):
+            account: MT5Account
+        class Args(BaseModel):
+            book: Book
+            retry_times_on_error:int=3
+        class Return(BaseModel):
+            book: Book = Book()
+        
+        param:Param
+        args:Args
+        ret:Return = Return()
+        
+    class Action(MT5Action):
+        def __call__(self, *args, **kwargs):
+            return ServiceOrientedArchitecture.Model.Return()
+        
+    def __init__(self, account: MT5Account, book: Book, retry_times_on_error=3) -> None:
+        if type(account) is dict:
+            account = MT5Account(**account)
+        if type(book) is dict:
+            book = Book(**book)
+            
+        super().__init__(account, retry_times_on_error)
+        self.book = book
+
+    def change_run(self, func_name, kwargs):
+        self.book_run = lambda: getattr(self.book, func_name)(**kwargs)
+        return self
+
+    def run(self):
+        # tbs = {f'{b.symbol}-{b.price_open}-{b.volume}':b.model_dump() for b in Book().getBooks()}
+        return self.book_run()
+        
 
 # @descriptions('Retrieve MT5 last N bars data in MetaTrader 5 terminal.',
 #             # account='MT5Account object for login.',
@@ -490,3 +539,6 @@ class MT5CopyLastRatesAction(MT5Action):
             return '\n'.join([f'```{symbol} {count} Open, High, Low, Close (OHLC) data points for the {timeframe} timeframe\n']+[f'{r[1]:.{digitsnum}f}\n{r[2]:.{digitsnum}f}\n{r[3]:.{digitsnum}f}\n{r[4]:.{digitsnum}f}\n' for r in rates]+['```'])
         else:
             return '\n'.join([f'```{symbol} {count} Open, High, Low, Close (OHLC) data points for the {timeframe} timeframe\n']+[f'{int(r[1])}\n{int(r[2])}\n{int(r[3])}\n{int(r[4])}\n' for r in rates]+['```'])
+
+
+
