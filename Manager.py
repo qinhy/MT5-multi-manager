@@ -134,7 +134,7 @@ class MT5Manager:
             return action_result
 
         except Exception as e:
-            raise e
+            print( e)
 
         finally:
             terminal_lock.release()
