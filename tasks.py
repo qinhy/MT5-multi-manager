@@ -1,5 +1,6 @@
 
 import os
+import random
 import time
 from fastapi import FastAPI
 from pymongo import MongoClient
@@ -216,11 +217,12 @@ class MockRESTapi:
     async def task_status(task_id: str):
         """Mock Endpoint to check the status of a task."""
         # Simulate a database response for task status
-        
+        states = ['PENDING','STARTED','SUCCESS','FAILURE','RETRY','REVOKED']
+        status = random.choice(states)
         task_status_mock = {
             "task_id": task_id,
-            "status": "SUCCESS",
-            "result": {"message": "Task completed successfully"}
+            "status": status,
+            "result": {"message": f"Task is {status.lower()}"}
         }
         time.sleep(1)
         return task_status_mock

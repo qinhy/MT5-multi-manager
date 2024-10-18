@@ -91,17 +91,17 @@ def test_book_change_tp_sl(account, book, tp, sl):
     return res
 
 # Run the tests with specific data
-# if __name__ == "__main__":
-#     # Example data for the tests
-#     test_broker = "test_broker"
-#     test_path = "/path/to/terminal"
-#     test_account = {"id": 123456, "balance": 1000.0}
+if __name__ == "__main__":
+    # Example data for the tests
+    test_broker = "test_broker"
+    test_path = "/path/to/terminal"
+    test_account = {"id": 123456, "balance": 1000.0}
     
-#     # Execute the tests with provided data
-#     test_add_terminal(test_broker, test_path)
-#     test_list_terminals()
-#     test_get_books(test_account.model_dump())
-#     test_account_info(test_account.model_dump())
+    # Execute the tests with provided data
+    test_add_terminal(test_broker, test_path)
+    test_list_terminals()
+    test_get_books(test_account)
+    test_account_info(test_account)
 
 #     test_book = Book(symbol='',price_open = 100.0,volume= 0.01)
 #     res = test_book_send(test_account.model_dump(), test_book.model_dump())
