@@ -1,1 +1,1 @@
-uvicorn tasks:RESTapi.api --reload
+uvicorn tasks:CeleryTask.api --reload
