@@ -3,8 +3,10 @@ import random
 import time
 import uuid
 from typing import Any, Dict, List
-
-import MetaTrader5 as mt5
+try:
+    import MetaTrader5 as mt5
+except Exception as e:
+    print(e)
 from pydantic import BaseModel, model_validator
 
 
@@ -28,7 +30,7 @@ class MT5Action:
         self._account.account_server = account_server
         return self
 
-    def run_action(self):
+    def run_action(self,*args, **kwargs):
         while self.retry_times_on_error > 1:
             try:
                 res = self.run()
@@ -39,11 +41,11 @@ class MT5Action:
                 self.retry_times_on_error -= 1
                 time.sleep(1)
         
-        res = self.run()
+        res = self.run(*args, **kwargs)
         self.on_end(res)
         return res
 
-    def run(self):
+    def run(self,*args, **kwargs):
         print("Executing action with MT5")
 
     def on_end(self, res):
@@ -100,7 +102,7 @@ class MT5Manager:
             raise ValueError('The broker is not supported!')
         return random.choice(list(t_locks))
     
-    def do(self, action: MT5Action):
+    def do(self, action: MT5Action, *args, **kwargs):
         terminal_lock = self._get_terminal_lock(action._account.account_server)
         
         try:
@@ -126,13 +128,13 @@ class MT5Manager:
             if action.uuid not in self.results:
                 self.results[action.uuid] = []
             
-            action_result = action.run_action()
+            action_result = action.run_action(*args, **kwargs)
             self.results[action.uuid].append(action_result)
             
             return action_result
 
         except Exception as e:
-            print( e)
+            raise e
 
         finally:
             terminal_lock.release()
@@ -428,3 +430,63 @@ class BookAction(MT5Action):
     def run(self):
         # tbs = {f'{b.symbol}-{b.price_open}-{b.volume}':b.model_dump() for b in Book().getBooks()}
         return self.book_run()
+    
+
+# @descriptions('Retrieve MT5 last N bars data in MetaTrader 5 terminal.',
+#             # account='MT5Account object for login.',
+#             # symbol='Financial instrument name (e.g., EURUSD).',
+#             # timeframe='Timeframe from which the bars are requested. {M1, H1, ...}',
+#             # # start_pos='Index of the first bar to retrieve.',
+#             # count='Number of bars to retrieve.'
+#             )
+class MT5Rates(BaseModel):
+    pass
+class MT5CopyLastRatesAction(MT5Action):
+
+    _start_pos=0
+    _digitsnum = {'AUDJPY':3,'CADJPY':3,'CHFJPY':3,'CNHJPY':3,'EURJPY':3,
+                    'GBPJPY':3,'USDJPY':3,'NZDJPY':3,'XAUJPY':0,'JPN225':1,'US500':1}
+
+    def __init__(self, account: MT5Account, retry_times_on_error=3) -> None:
+        if type(account) is dict:
+            account = MT5Account(**account)            
+        super().__init__(account, retry_times_on_error)
+
+    def run(self,symbol:str,timeframe:str,count:int,
+            debug:bool=False,):
+        if debug:
+            return '```USDJPY H4 OHLC\n\n142.520\n143.087\n142.382\n142.511\n\n142.509\n142.606\n142.068\n142.266\n\n142.173\n142.954\n142.128\n142.688\n\n142.687\n142.846\n142.080\n142.127\n\n142.127\n142.579\n141.643\n142.534\n\n142.537\n143.004\n142.406\n142.945\n\n142.949\n143.370\n142.746\n143.112\n\n143.112\n143.914\n142.940\n143.624\n\n143.624\n144.125\n143.369\n143.966\n\n143.966\n144.397\n143.661\n144.279\n\n144.277\n144.528\n143.699\n143.807\n\n143.808\n144.069\n143.561\n144.041\n\n144.039\n144.072\n142.972\n143.635\n\n143.634\n143.922\n143.326\n143.553\n\n143.547\n143.881\n143.423\n143.818\n\n143.817\n144.190\n143.561\n143.735\n\n143.733\n144.329\n143.532\n144.328\n\n144.327\n145.446\n144.076\n145.370\n\n145.370\n146.261\n145.298\n146.029\n\n146.030\n146.514\n145.967\n146.454\n\n146.454\n147.054\n146.258\n146.992\n\n146.993\n147.240\n146.676\n146.724\n\n146.723\n146.863\n146.301\n146.749\n\n146.749\n146.993\n146.517\n146.772\n\n146.778\n147.179\n146.470\n146.716\n\n146.716\n146.964\n146.578\n146.922\n\n146.922\n146.932\n146.617\n146.646\n\n146.645\n146.681\n146.152\n146.230\n\n146.230\n146.411\n145.917\n146.341\n\n146.342\n148.061\n146.340\n147.975\n```'
+        # symbol=self.symbol
+        # timeframe=self.timeframe
+        # count=self.count
+        digitsnum = mt5.symbol_info(symbol).digits
+        tf = {   'M1':mt5.TIMEFRAME_M1,
+                        'M2':mt5.TIMEFRAME_M2,
+                        'M3':mt5.TIMEFRAME_M3,
+                        'M4':mt5.TIMEFRAME_M4,
+                        'M5':mt5.TIMEFRAME_M5,
+                        'M6':mt5.TIMEFRAME_M6,
+                        'M10':mt5.TIMEFRAME_M10,
+                        'M12':mt5.TIMEFRAME_M12,
+                        'M12':mt5.TIMEFRAME_M12,
+                        'M20':mt5.TIMEFRAME_M20,
+                        'M30':mt5.TIMEFRAME_M30,
+                        'H1':mt5.TIMEFRAME_H1,
+                        'H2':mt5.TIMEFRAME_H2,
+                        'H3':mt5.TIMEFRAME_H3,
+                        'H4':mt5.TIMEFRAME_H4,
+                        'H6':mt5.TIMEFRAME_H6,
+                        'H8':mt5.TIMEFRAME_H8,
+                        'H12':mt5.TIMEFRAME_H12,
+                        'D1':mt5.TIMEFRAME_D1,
+                        'W1':mt5.TIMEFRAME_W1,
+                        'MN1':mt5.TIMEFRAME_MN1,
+                    }.get(timeframe,mt5.TIMEFRAME_H1)
+        # Retrieve the bar data from MetaTrader 5
+        rates = mt5.copy_rates_from_pos(symbol, tf, self._start_pos, count)
+        if rates is None:
+            return None, mt5.last_error()  # Return error details if retrieval fails
+        if digitsnum>0:
+            return '\n'.join([f'```{symbol} {count} Open, High, Low, Close (OHLC) data points for the {timeframe} timeframe\n']+[f'{r[1]:.{digitsnum}f}\n{r[2]:.{digitsnum}f}\n{r[3]:.{digitsnum}f}\n{r[4]:.{digitsnum}f}\n' for r in rates]+['```'])
+        else:
+            return '\n'.join([f'```{symbol} {count} Open, High, Low, Close (OHLC) data points for the {timeframe} timeframe\n']+[f'{int(r[1])}\n{int(r[2])}\n{int(r[3])}\n{int(r[4])}\n' for r in rates]+['```'])
