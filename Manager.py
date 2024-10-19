@@ -224,6 +224,7 @@ class Book(BaseModel):
     ticket: int = -1
     is_order: bool = False
     is_position: bool = False
+    acc_info: dict = {}
 
     _book: Any = None# mt5_order_position
     _type: str = ''
@@ -253,9 +254,9 @@ class Book(BaseModel):
         # Example operation: Getting account information
         account_info = mt5.account_info()
         if account_info is None:
-            return "Failed to get account info"
+            raise ValueError("Failed to get account info")
         else:
-            return account_info
+            return Book(acc_info=account_info._asdict())
         
     def set_mt5_book(self,book):
         self._book = book
@@ -453,14 +454,15 @@ class BookService(ServiceOrientedArchitecture):
             book:Book
 
         class Args(BaseModel):
-            book: Book
-            retry_times_on_error:int=3
+            p:float=-1.0 #price
+            tp:float=-1.0
+            sl:float=-1.0
 
         class Return(BaseModel):
             books:list[Book] = []
         
         param:Param
-        args:Args
+        args:Args = Args()
         ret:Return = Return()
 
         @staticmethod
@@ -497,13 +499,13 @@ class BookService(ServiceOrientedArchitecture):
             self.book = self.model.param.book
 
         def change_run(self, func_name, kwargs):
+            self.model.args = BookService.Model.Args(**kwargs)
             self.book_run = lambda: getattr(self.book, func_name)(**kwargs)
             return self
 
         def run(self):
             # tbs = {f'{b.symbol}-{b.price_open}-{b.volume}':b.model_dump() for b in Book().getBooks()}
-            self.model.ret = self.book_run()
-            return self.model
+            return self.book_run()
         
 
 # @descriptions('Retrieve MT5 last N bars data in MetaTrader 5 terminal.',
