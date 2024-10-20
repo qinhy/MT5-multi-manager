@@ -33,7 +33,7 @@ def test_list_terminals():
 
 # Test getting books for an account
 def test_get_books(account):
-    response = requests.post(f"{BASE_URL}/books/", json=account)
+    response = requests.get(f"{BASE_URL}/books/", json=account)
     time.sleep(1)
     print(response.json()['task_id'])
     res = requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json()
@@ -44,7 +44,7 @@ def test_get_books(account):
 
 # Test fetching account info
 def test_account_info(account):
-    response = requests.post(f"{BASE_URL}/account/info", json=account)
+    response = requests.get(f"{BASE_URL}/accounts/info", json=account)
     time.sleep(1)
     print(response.json()['task_id'])
     res = requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json()

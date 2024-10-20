@@ -73,21 +73,21 @@ class CeleryTask:
         res = ba.change_run(action, kwargs)()
         
         if action == 'getBooks':
-            return {f'{b.symbol}-{b.price_open}-{b.volume}': b.model_dump() for b in res.ret.books}
+            return {f'{b.symbol}-{b.price_open}-{b.volume}-{b.ticket}': b.model_dump() for b in res.ret.books}
         elif action in ['send', 'changeP', 'changeTS', 'account_info']:
             return res.ret.books[0].model_dump()
         else:
             return res.model_dump()
         
     @staticmethod
-    @api.post("/account/info")
+    @api.get("/accounts/info")
     def api_account_info(acc: MT5Account):
         """Endpoint to fetch account information."""
         task = CeleryTask.book_action.delay(acc.model_dump(), Book().model_dump(), action='account_info')
         return {'task_id': task.id}
 
     @staticmethod
-    @api.post("/books/")
+    @api.get("/books/")
     def api_get_books(acc: MT5Account):
         """Endpoint to get books for a given MT5 account."""
         task = CeleryTask.book_action.delay(acc.model_dump(), Book().model_dump(), action='getBooks')
@@ -133,10 +133,10 @@ class CeleryTask:
         model = MT5CopyLastRatesService.Model.build(acc)
         act = MT5CopyLastRatesService.Action(model)
         res = act(symbol=symbol,timeframe=timeframe,count=count,debug=debug)
-        return str(res.ret)
+        return res.ret.model_dump()
     
     @staticmethod
-    @api.post("/rates/copy")
+    @api.get("/rates/")
     def api_rates_copy(acc: MT5Account, symbol: str, timeframe: str, count: int, debug: bool = False):
         """
         Endpoint to copy rates for a given MT5 account, symbol, timeframe, and count.
@@ -185,13 +185,13 @@ class MockRESTapi:
         return terminals_mock
 
     @staticmethod
-    @api.post("/books/")
+    @api.get("/books/")
     async def get_books(acc: MT5Account):
         """Mock Endpoint to get books for a given MT5 account."""
         return {'task_id': 'mock_task_id'}
 
     @staticmethod
-    @api.post("/account/info")
+    @api.get("/accounts/info")
     async def account_info(acc: MT5Account):
         """Mock Endpoint to fetch account information."""
         return {'task_id': 'mock_task_id'}

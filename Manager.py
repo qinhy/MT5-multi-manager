@@ -7,6 +7,7 @@ try:
     import MetaTrader5 as mt5
 except Exception as e:
     print(e)
+import numpy as np
 from pydantic import BaseModel, model_validator
 
 
@@ -576,7 +577,7 @@ class MT5CopyLastRatesService:
             param = MT5CopyLastRatesService.Model.Param(account=acc)
             return MT5CopyLastRatesService.Model(param=param)
 
-    class Action:
+    class Action(MT5Action):
         _start_pos = 0
         _digitsnum = {'AUDJPY': 3, 'CADJPY': 3, 'CHFJPY': 3, 'CNHJPY': 3, 'EURJPY': 3,
                       'GBPJPY': 3, 'USDJPY': 3, 'NZDJPY': 3, 'XAUJPY': 0, 'JPN225': 1, 'US500': 1}
@@ -595,6 +596,9 @@ class MT5CopyLastRatesService:
                 model = MT5CopyLastRatesService.Model(**model)
             # Store the model instance
             self.model: MT5CopyLastRatesService.Model = model
+            account = self.model.param.account
+            super().__init__(account)
+
 
         def run(self, symbol: str = None, timeframe: str = None, count: int = None, debug: bool = None):
             # Update model.args with current call arguments, or use existing model values if not provided
@@ -614,14 +618,14 @@ class MT5CopyLastRatesService:
             # Retrieve symbol digits info
             digitsnum = mt5.symbol_info(self.model.args.symbol).digits
             # Retrieve rates from MT5
-            rates = mt5.copy_rates_from_pos(self.model.args.symbol, tf, self._start_pos, self.model.args.count)
+            rates:np.ndarray = mt5.copy_rates_from_pos(self.model.args.symbol, tf, self._start_pos, self.model.args.count)
 
             if rates is None:
                 error_code, error_msg = mt5.last_error()
                 raise ValueError(f"Failed to retrieve rates: {error_msg} (Error code: {error_code})")
 
             # Populate the return part of the model
-            self.model.ret.rates = rates
+            self.model.ret.rates = rates.tolist()
             self.model.ret.digitsnum = digitsnum
             self.model.ret.error = None
             return self.model  # Return the whole model with rates
