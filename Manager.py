@@ -218,8 +218,8 @@ class Book(BaseModel):
     
     state: Controller.Null = Controller.Plan()
     symbol: str = ''
-    sl: float = -1.0
-    tp: float = -1.0
+    sl: float = 0.0
+    tp: float = 0.0
     price_open: float = -1.0
     volume: float = -1.0
     magic:int = 901000
@@ -457,8 +457,8 @@ class BookService(ServiceOrientedArchitecture):
 
         class Args(BaseModel):
             p:float=-1.0 #price
-            tp:float=-1.0
-            sl:float=-1.0
+            tp:float=0.0
+            sl:float=0.0
 
         class Return(BaseModel):
             books:list[Book] = []
@@ -523,14 +523,14 @@ class MT5CopyLastRatesService:
             account: MT5Account = None
         
         class Args(BaseModel):
-            symbol: str = "USDJPY"
+            symbol: str = "null"
             timeframe: str = "H1"
             count: int = 10
             debug: bool = False
             retry_times_on_error: int = 3
 
         class Return(BaseModel):
-            symbol: str = "USDJPY"
+            symbol: str = "null"
             timeframe: str = "H1"
             count: int = 10
             rates: list = None
@@ -582,8 +582,16 @@ class MT5CopyLastRatesService:
         _digitsnum = {'AUDJPY': 3, 'CADJPY': 3, 'CHFJPY': 3, 'CNHJPY': 3, 'EURJPY': 3,
                       'GBPJPY': 3, 'USDJPY': 3, 'NZDJPY': 3, 'XAUJPY': 0, 'JPN225': 1, 'US500': 1}
 
-        def __call__(self, *args, **kwargs):
+        def __call__(self,  symbol: str, timeframe: str, count: int, debug: bool = False):
+            # Update model.args with current call arguments, or use existing model values if not provided
+            self.model.args.symbol = symbol
+            self.model.args.timeframe = timeframe
+            self.model.args.count = count
+            self.model.args.debug = debug
             res:MT5CopyLastRatesService.Model = MT5Manager().get_singleton().do(self)
+            self.model.ret.symbol = symbol
+            self.model.ret.timeframe = timeframe
+            self.model.ret.count = count
             return res
         
         def __init__(self, model=None):
@@ -615,8 +623,8 @@ class MT5CopyLastRatesService:
             # Simplified timeframe mapping using getattr with a default
             tf = getattr(mt5, f"TIMEFRAME_{self.model.args.timeframe}", mt5.TIMEFRAME_H1)
 
-            # Retrieve symbol digits info
-            digitsnum = mt5.symbol_info(self.model.args.symbol).digits
+            # Retrieve symbol digits info            
+            digitsnum = self._digitsnum[self.model.args.symbol]
             # Retrieve rates from MT5
             rates:np.ndarray = mt5.copy_rates_from_pos(self.model.args.symbol, tf, self._start_pos, self.model.args.count)
 
