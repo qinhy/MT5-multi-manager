@@ -47,11 +47,13 @@ class CeleryTask:
     @staticmethod
     @celery_app.task(bind=True)
     def get_terminal(t:Task):
+        print(MT5Manager().get_singleton().terminals)
         return { k:[i.exe_path for i in v] for k,v in MT5Manager().get_singleton().terminals.items()}
     @staticmethod
     @api.get("/terminals/")
-    def api_add_terminal():
-        return CeleryTask.get_terminal()
+    def api_get_terminal():
+        task = CeleryTask.get_terminal.delay()
+        return {'task_id': task.id}
     
     @staticmethod
     @celery_app.task(bind=True)

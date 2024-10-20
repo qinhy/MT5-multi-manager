@@ -93,7 +93,8 @@ class MT5Manager:
     def add_terminal(self, account_server='XMTrading', exe_path="path/to/your/terminal64.exe"):
         if account_server not in self.terminals:
             self.terminals[account_server] = set()
-        self.terminals[account_server].add(MT5Manager.TerminalLock(exe_path=exe_path))
+        if exe_path not in set([i.exe_path for i in self.terminals[account_server]]):
+            self.terminals[account_server].add(MT5Manager.TerminalLock(exe_path=exe_path))
 
     def _get_terminal_lock(self, account_server='XMTrading'):
         broker = account_server.split('-')[0]

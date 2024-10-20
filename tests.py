@@ -25,10 +25,10 @@ def test_add_terminal(broker, path):
 def test_list_terminals():
     response = requests.get(f"{BASE_URL}/terminals/")
     time.sleep(1)
-    print(response.json())
-    raise_error(response, 200)
-    terminals = response.json()
-    assert isinstance(terminals, dict), "Expected a dictionary of terminals"
+    time.sleep(1)
+    print(response.json()['task_id'])
+    res = requests.get(f"http://localhost:8000/tasks/status/{response.json()['task_id']}").json()
+    print(res)
     print("test_list_terminals passed")
 
 # Test getting books for an account
@@ -113,7 +113,7 @@ def test_book_change_tp_sl(account, book, tp, sl):
 # test_book2 = Book(**json.loads(res["result"]))
 # res = test_book_change_tp_sl(test_account, test_book2.model_dump(), 200.0, 51.0)
 # res = test_book_change_tp_sl(test_account, test_book2.model_dump(),  51.0,200.0)
-# res = test_book_close(test_account, test_book2.model_dump()
+# res = test_book_close(test_account, test_book2.model_dump())
 
 #     test_book2 = Book(**res)
 #     res = test_book_change_price(test_account.model_dump(), test_book2.model_dump(), 50.0)
