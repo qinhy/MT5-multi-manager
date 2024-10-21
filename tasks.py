@@ -5,12 +5,12 @@ import time
 from fastapi import FastAPI
 from pymongo import MongoClient
 from Manager import BookService, MT5CopyLastRatesService,MT5Manager,MT5Account,Book
+from basic import get_tasks_collection, set_task_revoked
 
 ######################################### Celery connect to local rabbitmq and db sqlite backend
 os.environ.setdefault('CELERY_TASK_SERIALIZER', 'json')
 
 from celery import Celery
-from celery.result import AsyncResult
 from celery.app import task as Task
 mongo_URL = 'mongodb://localhost:27017'
 celery_app = Celery('tasks', broker = 'amqp://localhost', backend = mongo_URL+'/tasks')
@@ -18,19 +18,29 @@ celery_app = Celery('tasks', broker = 'amqp://localhost', backend = mongo_URL+'/
 
 class CeleryTask:
     api = FastAPI()
+
+    ########################### essential function
+    @staticmethod
+    def is_json_serializable(value) -> bool:
+        res = isinstance(value, (int, float, bool, str,
+                                  list, dict, set, tuple)) or value is None
+        if not res : raise ValueError("Result is not JSON serializable")
+        return value
     
     @staticmethod
-    @celery_app.task(bind=True)
-    def revoke(t:Task, task_id: str):
-        """Method to revoke a task."""
-        return celery_app.control.revoke(task_id, terminate=True)
-    @staticmethod
+    @api.get("/tasks/status/{task_id}")
+    def api_task_status(task_id: str):
+        """Endpoint to check the status of a task."""
+        collection = get_tasks_collection()
+        res = collection.find_one({'_id': task_id})
+        if res: del res['_id']
+        return res
+    
     @api.get("/tasks/stop/{task_id}")
-    def api_stop_task(task_id: str):
-        task = CeleryTask.revoke.delay(task_id)
-        return {'task_id': task.id}
+    def api_task_stop(task_id: str):        
+        return set_task_revoked(task_id)
 
-
+    ########################### original function
     @staticmethod
     @celery_app.task(bind=True)
     def add_terminal(t:Task, broker: str, path: str):
@@ -41,9 +51,7 @@ class CeleryTask:
         """Endpoint to add a terminal to MT5."""
         task = CeleryTask.add_terminal.delay(broker, path)
         return {'task_id': task.id}
-    
-
-    
+        
     @staticmethod
     @celery_app.task(bind=True)
     def get_terminal(t:Task):
@@ -69,6 +77,7 @@ class CeleryTask:
         """
 
         model = BookService.Model.build(acc,book,action in ['send'])
+        model.task_id = t.request.id
         ba = BookService.Action(model)
         res = ba.change_run(action, kwargs)()
         
@@ -131,6 +140,7 @@ class CeleryTask:
     def rates_copy(t:Task,acc:MT5Account,
                    symbol:str,timeframe:str,count:int,debug:bool=False):
         model = MT5CopyLastRatesService.Model.build(acc)
+        model.task_id = t.request.id
         act = MT5CopyLastRatesService.Action(model)
         res = act(symbol=symbol,timeframe=timeframe,count=count,debug=debug)
         return res.ret.model_dump()
@@ -150,20 +160,6 @@ class CeleryTask:
         """
         task = CeleryTask.rates_copy.delay(acc.model_dump(), symbol, timeframe, count, debug)
         return {'task_id': task.id}
-
-        
-    @staticmethod
-    @api.get("/tasks/status/{task_id}")
-    def api_task_status(task_id: str):
-        """Endpoint to check the status of a task."""
-        client = MongoClient(mongo_URL)
-        db = client.get_database('tasks')
-        collection = db.get_collection('celery_taskmeta')
-        res = collection.find_one({'_id': task_id})
-        if res: del res['_id']
-        return res
-        # return {"task_id": task.id, "status": task.status, "result": task.result}
-
 
 class MockRESTapi:
     api = FastAPI()

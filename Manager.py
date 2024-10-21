@@ -1,13 +1,15 @@
+import os
 from threading import Lock
 import random
 import time
 import uuid
 from typing import Any, Dict, List
+
+from basic import ServiceOrientedArchitecture
 try:
     import MetaTrader5 as mt5
 except Exception as e:
     print(e)
-import numpy as np
 from pydantic import BaseModel, model_validator
 
 
@@ -92,6 +94,8 @@ class MT5Manager:
         return self.__class__(self._uuid,self._results,self._terminals,self._is_singleton)
 
     def add_terminal(self, account_server='XMTrading', exe_path="path/to/your/terminal64.exe"):
+        # if not os.path.exists(exe_path):
+        #     raise ValueError(f'No such file of {exe_path}')
         if account_server not in self.terminals:
             self.terminals[account_server] = set()
         if exe_path not in set([i.exe_path for i in self.terminals[account_server]]):
@@ -140,8 +144,6 @@ class MT5Manager:
 
         finally:
             terminal_lock.release()
-
-
 
 class Book(BaseModel):
     class Controller(BaseModel):
@@ -416,41 +418,8 @@ class Book(BaseModel):
         }
         return self._sendRequest(request)
     
-
-class ServiceOrientedArchitecture:
-    class Model(BaseModel):
-        class Param(BaseModel):
-            pass
-        class Args(BaseModel):
-            pass
-        class Return(BaseModel):
-            pass
-    class Action(MT5Action):
-        def __call__(self, *args, **kwargs):
-            res:ServiceOrientedArchitecture.Model = None
-            return res
-
-class BookAction(MT5Action):
-    def __init__(self, account: MT5Account, book: Book, retry_times_on_error=3) -> None:
-        if type(account) is dict:
-            account = MT5Account(**account)
-        if type(book) is dict:
-            book = Book(**book)
-            
-        super().__init__(account, retry_times_on_error)
-        self.book = book
-
-    def change_run(self, func_name, kwargs):
-        self.book_run = lambda: getattr(self.book, func_name)(**kwargs)
-        return self
-
-    def run(self):
-        # tbs = {f'{b.symbol}-{b.price_open}-{b.volume}':b.model_dump() for b in Book().getBooks()}
-        return self.book_run()
-
-
 class BookService(ServiceOrientedArchitecture):
-    class Model(BaseModel):
+    class Model(ServiceOrientedArchitecture.Model):
         class Param(BaseModel):
             account:MT5Account
             book:Book
@@ -477,8 +446,9 @@ class BookService(ServiceOrientedArchitecture):
             param = BookService.Model.Param(account=acc,book=book)
             return BookService.Model(param=param)
         
-    class Action(MT5Action):
+    class Action(MT5Action, ServiceOrientedArchitecture.Action):
         def __call__(self, *args, **kwargs):
+            super().__call__(*args, **kwargs)
             res = MT5Manager().get_singleton().do(self)
             if isinstance(res,Book):
                 res = [res]
@@ -518,7 +488,7 @@ class BookService(ServiceOrientedArchitecture):
 #             # count='Number of bars to retrieve.'
 #             )
 class MT5CopyLastRatesService:
-    class Model(BaseModel):
+    class Model(ServiceOrientedArchitecture.Model):
         class Param(BaseModel):
             account: MT5Account = None
         
@@ -577,66 +547,68 @@ class MT5CopyLastRatesService:
             param = MT5CopyLastRatesService.Model.Param(account=acc)
             return MT5CopyLastRatesService.Model(param=param)
 
-    class Action(MT5Action):
+    class Action(MT5Action, ServiceOrientedArchitecture.Action):
         _start_pos = 0
-        _digitsnum = {'AUDJPY': 3, 'CADJPY': 3, 'CHFJPY': 3, 'CNHJPY': 3, 'EURJPY': 3,
-                      'GBPJPY': 3, 'USDJPY': 3, 'NZDJPY': 3, 'XAUJPY': 0, 'JPN225': 1, 'US500': 1}
+        _digitsnum = {
+            'AUDJPY': 3, 'CADJPY': 3, 'CHFJPY': 3, 'CNHJPY': 3, 'EURJPY': 3,
+            'GBPJPY': 3, 'USDJPY': 3, 'NZDJPY': 3, 'XAUJPY': 0, 'JPN225': 1, 'US500': 1
+        }
 
-        def __call__(self,  symbol: str, timeframe: str, count: int, debug: bool = False):
-            # Update model.args with current call arguments, or use existing model values if not provided
-            self.model.args.symbol = symbol
-            self.model.args.timeframe = timeframe
-            self.model.args.count = count
-            self.model.args.debug = debug
-            res:MT5CopyLastRatesService.Model = MT5Manager().get_singleton().do(self)
-            self.model.ret.symbol = symbol
-            self.model.ret.timeframe = timeframe
-            self.model.ret.count = count
-            return res
-        
         def __init__(self, model=None):
+            # Remove None values from the model if it's a dictionary
             if isinstance(model, dict):
-                # Remove keys with None values from the dictionary
-                nones = [k for k, v in model.items() if v is None]
-                for i in nones:
-                    del model[i]
-                # Initialize the model as an instance of MT5CopyLastRatesService.Model
+                model = {k: v for k, v in model.items() if v is not None}
                 model = MT5CopyLastRatesService.Model(**model)
-            # Store the model instance
             self.model: MT5CopyLastRatesService.Model = model
             account = self.model.param.account
             super().__init__(account)
 
-
-        def run(self, symbol: str = None, timeframe: str = None, count: int = None, debug: bool = None):
-            # Update model.args with current call arguments, or use existing model values if not provided
+        def _update_args(self, symbol: str = None, timeframe: str = None, count: int = None, debug: bool = None):
+            # Update model args only if provided (fall back to existing ones otherwise)
             self.model.args.symbol = symbol if symbol is not None else self.model.args.symbol
             self.model.args.timeframe = timeframe if timeframe is not None else self.model.args.timeframe
             self.model.args.count = count if count is not None else self.model.args.count
             self.model.args.debug = debug if debug is not None else self.model.args.debug
 
-            if self.model.args.debug:
-                self.model.ret.rates = None
-                self.model.ret.digitsnum = 3  # Example value for debugging output
-                return self.model  # Return the whole model
+        def __call__(self, symbol: str, timeframe: str, count: int, debug: bool = False):
+            super().__call__()
+            self._update_args(symbol, timeframe, count, debug)
+            # Perform the MT5 action
+            res: MT5CopyLastRatesService.Model = MT5Manager().get_singleton().do(self)
+            self.model.ret.symbol = symbol
+            self.model.ret.timeframe = timeframe
+            self.model.ret.count = count
+            return res
 
-            # Simplified timeframe mapping using getattr with a default
+        def run(self, symbol: str = None, timeframe: str = None, count: int = None, debug: bool = None):
+            self._update_args(symbol, timeframe, count, debug)
+
+            if self.model.args.debug:
+                # For debugging, return simple mock values
+                self.model.ret.rates = None
+                self.model.ret.digitsnum = 3  # Mock value for digits
+                return self.model
+
+            # Simplified timeframe mapping using getattr with a fallback
             tf = getattr(mt5, f"TIMEFRAME_{self.model.args.timeframe}", mt5.TIMEFRAME_H1)
 
-            # Retrieve symbol digits info            
-            digitsnum = self._digitsnum[self.model.args.symbol]
-            # Retrieve rates from MT5
-            rates:np.ndarray = mt5.copy_rates_from_pos(self.model.args.symbol, tf, self._start_pos, self.model.args.count)
+            # Get symbol's digit info with default value of 3
+            digitsnum = self._digitsnum.get(self.model.args.symbol, 3)
+
+            # Retrieve rates using MT5 API
+            rates = mt5.copy_rates_from_pos(self.model.args.symbol, tf, self._start_pos, self.model.args.count)
 
             if rates is None:
                 error_code, error_msg = mt5.last_error()
                 raise ValueError(f"Failed to retrieve rates: {error_msg} (Error code: {error_code})")
 
-            # Populate the return part of the model
+            # Populate the return model with results
             self.model.ret.rates = rates.tolist()
             self.model.ret.digitsnum = digitsnum
             self.model.ret.error = None
-            return self.model  # Return the whole model with rates
+
+            return self.model
+
 
 # Example usage:
 # model_dict = {
