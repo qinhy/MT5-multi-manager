@@ -179,7 +179,10 @@ class Book(BaseModel):
                 res = book._close_order()
                 if res : book.state = Book.Controller.Null()
             def changeP(self,book,p):
-                raise ValueError('This is a exists Order, You can close it.')
+                book:Book = book
+                res = book._changeOrderP(p)
+                if res : book.price_open = p
+
             def changeTS(self,book,tp,sl):
                 book:Book = book
                 res = book._changeOrderTPSL(tp,sl)
@@ -309,6 +312,16 @@ class Book(BaseModel):
 
         return True
 
+    def _changeOrderP(self, p):
+        request = {
+            "action": mt5.TRADE_ACTION_MODIFY,
+            "order": self.ticket,
+            "price": p,
+            "tp": self.tp,
+            "sl": self.sl
+        }
+        return self._sendRequest(request)
+
     def _changeOrderTPSL(self, tp=0.0,sl=0.0):
         request = {
             "action": mt5.TRADE_ACTION_MODIFY,
@@ -317,7 +330,6 @@ class Book(BaseModel):
             "tp": tp,
             "sl": sl
         }
-        print(request)
         return self._sendRequest(request)
 
     def _changePositionTPSL(self, tp=0.0,sl=0.0):
