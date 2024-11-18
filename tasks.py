@@ -3,48 +3,19 @@ import os
 import random
 import time
 from fastapi import FastAPI, HTTPException
-from pymongo import MongoClient
-import requests
-from pymongo.errors import ConnectionFailure
 from Manager import BookService, MT5CopyLastRatesService,MT5Manager,MT5Account,Book
-from basic import get_tasks_collection, set_task_revoked
+from basic import BasicApp
 
 ######################################### Celery connect to local rabbitmq and db sqlite backend
 os.environ.setdefault('CELERY_TASK_SERIALIZER', 'json')
 
-from celery import Celery
 from celery.app import task as Task
-mongo_URL = 'mongodb://localhost:27017'
-celery_app = Celery('tasks', broker = 'amqp://localhost', backend = mongo_URL+'/tasks')
-# celery_app = Celery('tasks', broker = 'redis://localhost:6379/0', backend = 'redis://localhost:6379/0')
 
-def check_rabbitmq_health(host='localhost', port=15672, user='guest', password='guest') -> bool:
-    url = f'http://{host}:{port}/api/health/checks/alarms'
-    try:
-        response = requests.get(url, auth=(user, password), timeout=5)
-        if response.status_code == 200:
-            return True
-        else:
-            return False
-    except requests.exceptions.RequestException as e:
-        return False
-
-def check_mongodb_health(url=mongo_URL) -> bool:
-    try:
-        client = MongoClient(url, serverSelectionTimeoutMS=2000)
-        client.admin.command('ping')
-        return True
-    except ConnectionFailure as e:
-        return False
-
-def check_services() -> bool:
-    rabbitmq_health = check_rabbitmq_health()
-    mongodb_health = check_mongodb_health()
-    if rabbitmq_health and mongodb_health:
-        return True
-    else:
-        return False
-
+celery_app = BasicApp.get_celery_app()
+def api_ok():
+    if not BasicApp.check_services():
+        raise HTTPException(status_code=503, detail={'error':'service not healthy'})
+        
 class CeleryTask:
     api = FastAPI()
 
@@ -59,17 +30,17 @@ class CeleryTask:
     @staticmethod
     @api.get("/tasks/status/{task_id}")
     def api_task_status(task_id: str):
-        if not check_services():raise HTTPException(status_code=503, detail={'error':'service not healthy'})
+        api_ok()
         """Endpoint to check the status of a task."""
-        collection = get_tasks_collection()
+        collection = BasicApp.get_tasks_collection()
         res = collection.find_one({'_id': task_id})
         if res: del res['_id']
         return res
     
     @api.get("/tasks/stop/{task_id}")
     def api_task_stop(task_id: str):        
-        if not check_services():raise HTTPException(status_code=503, detail={'error':'service not healthy'})
-        return set_task_revoked(task_id)
+        api_ok()
+        return BasicApp.set_task_revoked(task_id)
 
     ########################### original function
     @staticmethod
@@ -79,7 +50,7 @@ class CeleryTask:
     @staticmethod
     @api.post("/terminals/add")
     def api_add_terminal(broker: str, path: str):
-        if not check_services():raise HTTPException(status_code=503, detail={'error':'service not healthy'})
+        api_ok()
         """Endpoint to add a terminal to MT5."""
         task = CeleryTask.add_terminal.delay(broker, path)
         return {'task_id': task.id}
@@ -92,7 +63,7 @@ class CeleryTask:
     @staticmethod
     @api.get("/terminals/")
     def api_get_terminal():
-        if not check_services():raise HTTPException(status_code=503, detail={'error':'service not healthy'})
+        api_ok()
         task = CeleryTask.get_terminal.delay()
         return {'task_id': task.id}
     
@@ -124,7 +95,7 @@ class CeleryTask:
     @staticmethod
     @api.get("/accounts/info")
     def api_account_info(acc: MT5Account):
-        if not check_services():raise HTTPException(status_code=503, detail={'error':'service not healthy'})
+        api_ok()
         """Endpoint to fetch account information."""
         task = CeleryTask.book_action.delay(acc.model_dump(), Book().model_dump(), action='account_info')
         return {'task_id': task.id}
@@ -132,7 +103,7 @@ class CeleryTask:
     @staticmethod
     @api.get("/books/")
     def api_get_books(acc: MT5Account):
-        if not check_services():raise HTTPException(status_code=503, detail={'error':'service not healthy'})
+        api_ok()
         """Endpoint to get books for a given MT5 account."""
         task = CeleryTask.book_action.delay(acc.model_dump(), Book().model_dump(), action='getBooks')
         return {'task_id': task.id}
@@ -141,7 +112,7 @@ class CeleryTask:
     @staticmethod
     @api.post("/books/send")
     def api_book_send(acc: MT5Account, book: Book):
-        if not check_services():raise HTTPException(status_code=503, detail={'error':'service not healthy'})
+        api_ok()
         """Endpoint to send a book."""
         task = CeleryTask.book_action.delay(acc.model_dump(), book.model_dump(), action='send')
         return {'task_id': task.id}
@@ -150,7 +121,7 @@ class CeleryTask:
     @staticmethod
     @api.post("/books/close")
     def api_book_close(acc: MT5Account, book: Book):
-        if not check_services():raise HTTPException(status_code=503, detail={'error':'service not healthy'})
+        api_ok()
         """Endpoint to close a book."""
         task = CeleryTask.book_action.delay(acc.model_dump(), book.model_dump(), action='close')
         return {'task_id': task.id}
@@ -159,7 +130,7 @@ class CeleryTask:
     @staticmethod
     @api.post("/books/change/price")
     def api_book_change_price(acc: MT5Account, book: Book, p: float):
-        if not check_services():raise HTTPException(status_code=503, detail={'error':'service not healthy'})
+        api_ok()
         """Endpoint to change the price of a book."""
         task = CeleryTask.book_action.delay(acc.model_dump(), book.model_dump(), action='changeP', p=p)
         return {'task_id': task.id}
@@ -168,7 +139,7 @@ class CeleryTask:
     @staticmethod
     @api.post("/books/change/tpsl")
     def api_book_change_tp_sl(acc: MT5Account, book: Book, tp: float, sl: float):
-        if not check_services():raise HTTPException(status_code=503, detail={'error':'service not healthy'})
+        api_ok()
         """Endpoint to change tp sl values of a book."""
         task = CeleryTask.book_action.delay(acc.model_dump(), book.model_dump(), action='changeTS', tp=tp, sl=sl)
         return {'task_id': task.id}
@@ -187,7 +158,7 @@ class CeleryTask:
     @staticmethod
     @api.get("/rates/")
     def api_rates_copy(acc: MT5Account, symbol: str, timeframe: str, count: int, debug: bool = False):
-        if not check_services():raise HTTPException(status_code=503, detail={'error':'service not healthy'})
+        api_ok()
         """
         Endpoint to copy rates for a given MT5 account, symbol, timeframe, and count.
         
