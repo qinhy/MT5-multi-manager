@@ -5,7 +5,7 @@ import time
 import uuid
 from typing import Any, Dict, List
 
-from basic import ServiceOrientedArchitecture
+from .Basic import ServiceOrientedArchitecture
 try:
     import MetaTrader5 as mt5
 except Exception as e:

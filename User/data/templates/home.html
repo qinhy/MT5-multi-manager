@@ -1,0 +1,366 @@
+<html>
+
+<head>
+    <title>Demo Chat</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js"></script>
+</head>
+
+<body class="bg-gray-200">
+    <div id="messages" class="flex flex-col space-y-4 p-4 overflow-y-auto scrollbar-custom">
+        <div id="card-floating-chat" class="max-w-xl mx-auto bg-white shadow-md rounded-lg">
+    
+            <!-- Chat Messages -->
+            <div v-for="(message, index) in messages" :key="index" class="chat-message">
+                <div @click="toggleExpand(index)" class="flex items-center space-x-2 p-2" :class="messageClasses(message)">
+                    <img :src="message.icon" alt="icon" class="w-6 h-6 rounded-full" :class="iconOrder(message)">
+                    <span class="message-content px-4 py-2 rounded-lg" :class="[message.class.background, message.class.textColor]">
+                        <div v-html="message.content"></div>
+                    </span>
+                </div>
+            </div>
+    
+            <!-- AI Response -->
+            <div class="mt-4 p-4">
+                <p v-if="processing" class="font-light text-lg break-all">
+                    <span class="text-red-500">AI :</span>{{answer}}
+                </p>
+            </div>
+    
+            <!-- Buttons Panel -->
+            <div  v-if="!processing" class="flex justify-end p-2 bg-gray-100 border-t border-gray-200 space-x-2">
+                <!-- Emoji Button -->
+                <button type="button" class="action-btn">
+                    <div v-html="emojiSVG" class="icon"></div>
+                </button>
+                <!-- Bell Button -->
+                <button type="button" class="action-btn">
+                    <div v-html="bellSVG" class="icon"></div>
+                </button>
+                <!-- Camera Button -->
+                <button type="button" class="action-btn">
+                    <div v-html="cameraSVG" class="icon"></div>
+                </button>
+                <!-- Reset Button -->
+                <button v-on:click="reset_messages()" type="submit" class="reset-btn">
+                    <img :src="this.roleImageMap['recycle']" alt="Click Me" class="w-6 h-6" />
+                </button>
+            </div>
+    
+            <!-- Chat Input Form -->
+            <form @submit.prevent="onSubmit" class="border-t border-gray-200 p-2">
+                <div class="relative flex">
+                    <textarea v-if="!processing" v-model="query" role="question" placeholder="hi!" class="mr-16 input-area" :rows="this.textareaRows"></textarea>
+                    <div class="absolute bottom-0 right-0 action-panel">
+                        <button v-on:click="stopProcessing" v-if="processing" class="stop-btn">Stop</button>
+                        <button v-if="!processing" type="submit" class="send-btn">
+                            <div v-html="sendSVG"></div>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Styles -->
+    <style scoped>
+        .scrollbar-custom {
+            scrollbar-width: thin;
+            scrollbar-color: blue lightblue;
+        }
+        .message-content {
+            position: relative;
+            max-height: 3.5rem;
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out;
+        }
+        .message-expanded .message-content {
+            max-height: 100%;
+        }
+        .message-collapsed .message-content::after {
+            content: "";
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 1rem;
+            background: linear-gradient(to bottom, transparent, lightblue);
+        }
+        .message-content a {
+            transition: all 0.3s ease-in-out;
+            color: blue;
+            text-decoration: underline;
+        }
+        .message-content a:hover {
+            color: darkblue;
+            text-decoration: none;
+        }
+        .message-content a:active {
+            color: red;
+        }
+        .action-btn, .reset-btn, .stop-btn, .send-btn {
+            transition: all 0.3s ease-in-out;
+            border: none;
+            padding: 0.5rem;
+            border-radius: 50%;
+            outline: none;
+        }
+        .action-btn:hover, .reset-btn:hover, .stop-btn:hover, .send-btn:hover {
+            transform: scale(1.1);
+        }
+        .icon {
+            width: 24px;
+            height: 24px;
+            fill: gray;
+        }
+        .input-area {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid gray;
+            outline: none;
+            resize: none;
+        }
+        .action-panel > button {
+            margin-left: 0.5rem;
+        }
+        .stop-btn {
+            background-color: red;
+            color: white;
+        }
+        .send-btn {
+            background-color: blue;
+            color: white;
+        }
+    </style>
+    
+    
+    <script>
+        window['VUE'] = new Vue({
+            el: '#card-floating-chat',
+            data() {
+                return {
+                    API_SERVER: window.location.href.substring(0, window.location.href.length - 1),
+                    emojiSVG: `
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>`,
+
+                    bellSVG: `
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                        </svg>`,
+
+                    cameraSVG: `
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>`,
+                    sendSVG: `
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
+                            class="h-6 w-6 ml-1 rotate-90">
+                            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/>
+                        </svg>`,
+                    roleImageMap: {
+                        'assistant': window.location.href.substring(0, window.location.href.length - 1) + '/icon/setting-line-icon.svg',
+                        'user': window.location.href.substring(0, window.location.href.length - 1) + '/icon/man-person-icon.svg',
+                        'system': window.location.href.substring(0, window.location.href.length - 1) + '/icon/configuration-icon.svg',
+                        'function': window.location.href.substring(0, window.location.href.length - 1) + '/icon/alphabet-f-icon.svg',
+                        'recycle': window.location.href.substring(0, window.location.href.length - 1) + "/icon/recycle-bin-line-icon.svg",
+                        'error': 'https://via.placeholder.com/50?text=error',
+                        'guest': 'https://via.placeholder.com/50?text=guest',
+                        'vip': 'https://via.placeholder.com/50?text=vip',
+                        'bot': 'https://via.placeholder.com/50?text=bot',
+                        'developer': 'https://via.placeholder.com/50?text=developer',
+                        'manager': 'https://via.placeholder.com/50?text=manager',
+                        'default': 'https://via.placeholder.com/50?text=default'
+                    },
+                    roleClassMap: {
+                        'assistant': { background: 'bg-gray-300', textColor: 'text-gray-600' },
+                        'user': { background: 'bg-blue-600', textColor: 'text-white' },
+                        'system': { background: 'bg-red-500', textColor: 'text-white' },
+                        'function': { background: 'bg-green-500', textColor: 'text-white' },
+                        'error': { background: 'bg-pink-400', textColor: 'text-white' },
+                        'guest': { background: 'bg-yellow-400', textColor: 'text-black' },
+                        'vip': { background: 'bg-purple-500', textColor: 'text-white' },
+                        'bot': { background: 'bg-indigo-500', textColor: 'text-white' },
+                        'developer': { background: 'bg-teal-500', textColor: 'text-white' },
+                        'manager': { background: 'bg-orange-500', textColor: 'text-black' },
+                        'default': { background: 'bg-white', textColor: 'text-black' }
+                    },
+                    token: localStorage.getItem('app_access_token'),
+                    query: '',
+                    answer: '',
+                    processing: false,
+                    messages: [
+                        //    {role:'assistant',
+                        //     content: "Command was run with root privileges. so it's more obviously now."
+                        //     isExpanded: false,
+                        //     },
+                        //     {role:'user',
+                        //     content: "Any updates on this issue? I'm getting the same error when trying to install devtools. Thanks"
+                        //     isExpanded: false,
+                        //     }
+                    ],
+                    listen_answer: undefined,
+                    error_msg: undefined,
+                    markdown_setting: window.markdownit({
+                        linkify: true, xhtmlOut: true, html: true, breaks: true,
+                    }),
+                    GET_include: { method: 'GET', credentials: 'include' },
+                    selected_files: Vue.computed(() => this.selected?.map(e => this.req?.items[e].path)),
+                }
+
+            },
+            mounted() {
+                this.setSystem();
+                this.refleshMsgs();
+                this.listen();
+            },
+            beforeDestroy: function () {
+                this.listen_answer?.close();
+            },
+            computed: {
+                textareaRows() {
+                    return this.query.length / 200 + 2;
+                }
+            },
+            methods: {
+                messageClasses(message) {
+                    return [
+                        'flex', 'items-end', 'space-y-1', 'p-1',
+                        message.role == 'user' ? 'justify-end' : '',
+                        message.isExpanded ? 'message-expanded' : 'message-collapsed'
+                    ];
+                },
+                iconOrder(message) {
+                    return message.role == 'user' ? 'order-1' : 'order-0';
+                },
+                toggleExpand(index) {
+                    this.messages[index].isExpanded = !this.messages[index].isExpanded;
+                },
+                markdown_render(text) {
+                    return this.markdown_setting.render(text);
+                }, //marked(text)},
+                get_query() { return this.query != '' ? this.query : 'hi!' },
+                async stopProcessing() {
+                    this.listen_answer?.close();
+                    this.processing = false;
+                    try {
+                        const response = await fetch(`${this.API_SERVER}/stop_answer`, this.GET_include);
+
+                        if (!response.ok) {
+                            throw new Error('Failed to stop processing');
+                        }
+
+                        this.answer = 'Processing stopped by user.';
+                    } catch (error) {
+                        console.error(error);
+                        this.answer = 'Error occurred while trying to stop processing.';
+                    }
+                },
+                async setSystem() {
+                    console.log(this.token);
+                    await fetch(this.API_SERVER + "/set_system", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.token}`
+                        },
+                        body: JSON.stringify({
+                            files: (this.req?.items) ? this.req.items : [],
+                            selected_files: (this.selected_files) ? this.selected_files : [],
+                        }),
+                    }).then((response) => {
+                        if (response.status == 401) logout();
+                    })
+                },
+                scrollToBottom() {
+                    this.$nextTick(() => {
+                        var el = document.querySelector('#card-floating-chat')
+                        if (el) { el.scrollTop = el.scrollHeight; }
+                    });
+                },
+                buildVueMsg(e) {
+                    const icon = this.roleImageMap[e.role] || this.roleImageMap['default'];
+                    const classes = this.roleClassMap[e.role] || this.roleClassMap['default'];
+                    var content = e.content !== '' ? e.content : (e.function_call?.arguments || '')
+                    if (e.role == 'system') content = '@assistant\n' + content;
+                    if (e.role == 'function') content = '@assistant\n' + content;
+                    if (e.role == 'error') content = '@user\n' + content;
+                    if (e.function_call) content = '@function\n' + content;
+                    var res = {
+                        role: e.role,
+                        content: content,
+                        isExpanded: e.role != 'function',
+                        icon: icon,
+                        class: classes
+                    };
+                    // res.content = res.content;//.split('\n').join('');
+                    res.content = this.markdown_render(res.content);
+                    return res;
+                },
+                async refleshMsgs() {
+                    const response_msgs = await fetch(this.API_SERVER + "/send_openai_info", this.GET_include);
+                    response_msgs.json().then(data => {
+                        if (data) {
+                            this.messages = data.map(e => this.buildVueMsg(e));
+                            this.scrollToBottom();
+                        }
+                        if (this.error_msg) {
+                            this.messages.push(this.error_msg);
+                            // this.messages.push(this.buildVueMsg({ role: 'error', content: 'Too many messages. Please clean!' }));
+                        }
+                    });
+                },
+                reset_messages() {
+                    fetch(this.API_SERVER + "/reset_messages", this.GET_include);
+                    this.error_msg = false;
+                    this.refleshMsgs();
+                },
+                update_answer(event) {
+                    const content = JSON.parse(event.data)['content'];
+                    // console.log(content,this.error_msg)
+                    if (content == '[DONE]') {
+                        this.refleshMsgs();
+                        this.processing = false
+                        this.answer = ''
+                        this.listen_answer.close();
+                        return;
+                    }
+                    if (content.includes(`## ERROR\n`)) {
+                        this.error_msg = this.buildVueMsg({ role: 'error', content: content })
+                    }
+                    this.answer += content;
+                    this.scrollToBottom();
+                },
+                listen() {
+                    this.listen_answer?.close();
+                    this.listen_answer = new EventSource(this.API_SERVER + "/listen_answer");
+                    this.listen_answer.onmessage = this.update_answer;
+                },
+                onSubmit: async function () {
+                    // this.selected_files = this.selected.map(e => this.req.items[e].path);
+                    this.messages.push(this.buildVueMsg({ role: 'user', content: this.get_query() }));
+                    this.scrollToBottom();
+                    this.processing = true
+                    await fetch(this.API_SERVER + "/ask", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.token}`
+                        },
+                        body: JSON.stringify({
+                            question: this.get_query(),
+                        }),
+                    });
+                    this.listen();
+                    this.query = '';
+                },
+            }
+        });
+    </script>
+</body>
+
+</html>

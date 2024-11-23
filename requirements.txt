@@ -1,0 +1,15 @@
+numpy
+gradio
+pandas
+requests
+celery
+redis
+opencv-python
+fastapi
+pydantic
+pydantic[email]
+starlette
+pymongo
+python-jose
+pyotp
+qrcode

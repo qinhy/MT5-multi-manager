@@ -1,1 +1,0 @@
-uvicorn tasks:CeleryTask.api --reload

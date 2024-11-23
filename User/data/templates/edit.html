@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit User Info</title>
+    
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 50px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        h2 {
+            text-align: center;
+        }
+
+        form {
+            max-width: 400px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        div {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="password"] {
+            width: 95%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        input[type="submit"] {
+            background-color: #007bff;
+            color: #fff;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        input[type="submit"]:hover {
+            background-color: #0056b3;
+        }
+    </style>
+
+    <script>
+        var apiurl = window.location.protocol + "//" +window.location.host;
+        window.onload = function () {
+            // Fetch current user data
+            fetch(apiurl + '/me', {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // {
+                //     "rank": [
+                //         0
+                //     ],
+                //     "create_time": "2024-11-20T11:39:22.575919+00:00",
+                //     "update_time": "2024-11-20T11:39:22.575919+00:00",
+                //     "status": "",
+                //     "metadata": {},
+                //     "username": "123",
+                //     "full_name": "123",
+                //     "role": "user",
+                //     "hashed_password": "VlzGnSMUNS3LRkt2iDeyrQ==",
+                //     "email": "123@123.com",
+                //     "disabled": false,
+                //     "uuid": "User:a3293ffe-e390-a9b3-ee9c-7d1438b64634"
+                // }
+                // console.log(data);
+                if (data) {
+                    document.getElementById("full_name").value = data.full_name || "";
+                    document.getElementById("email").value = data.email || "";
+                    document.getElementById("uuid").value = data.uuid || "";
+                    document.getElementById("new_password").value = ""; // Do not prepopulate password for security
+                } else {
+                    alert("Failed to load user information: " + (data.detail || "Unknown error"));
+                }
+            })
+            .catch(error => {
+                console.error("Error fetching user data:", error);
+                alert("Error occurred while fetching user data.");
+            });
+
+            document.getElementById("removeAccount").addEventListener('change', function () {
+                const isChecked = this.checked;
+                document.getElementById("full_name").required = !isChecked;
+                // document.getElementById("new_password").required = !isChecked;
+
+                document.getElementById("full_name").style.display = isChecked ? 'none' : '';
+                document.getElementById("labelFullName").style.display = isChecked ? 'none' : '';
+                document.getElementById("new_password").style.display = isChecked ? 'none' : '';
+                document.getElementById("labelNewPassword").style.display = isChecked ? 'none' : '';
+            });
+        }
+
+        function editUser(event) {
+            event.preventDefault();
+
+            const full_name = document.getElementById("full_name").value;
+            const is_remove = document.getElementById("removeAccount").checked;
+            const new_password = document.getElementById("new_password").value;
+            const password = document.getElementById("password").value;
+            const data = { full_name, new_password, is_remove, password };
+            const api = is_remove ? '/remove' : "/edit"
+
+            fetch(apiurl + api, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(data)
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === "success") {
+                        alert(data.message);
+                        if (is_remove) {
+                            window.location.href = apiurl + '/logout';
+                        }
+                    } else {
+                        alert("Update failed: " + data.detail);
+                    }
+                })
+                .catch(error => {
+                    alert("Error occurred during updating information.");
+                });
+        }
+
+    </script>
+</head>
+
+<body>
+    <h2>Edit User Info</h2>
+    <form id="editForm" onsubmit="editUser(event)">
+        
+        <div id="labelUUID">
+            <label for="uuid">UUID:</label>            
+            <input type="text" id="uuid" name="uuid" value="" disabled>
+        </div>
+
+        <div id="labelEmail">
+            <label for="email">Email:</label>            
+            <input type="text" id="email" name="email" value="" disabled>
+        </div>
+
+        <div id="labelFullName">
+            <label for="full_name">Full Name:</label>            
+            <input type="text" id="full_name" name="full_name" value="" required>
+        </div>
+
+        <div id="labelNewPassword">
+            <label for="Password">New Password:</label>
+            <input type="text" id="new_password" name="new_password" value="">
+        </div>
+
+        <div>
+            <label>
+                <input type="checkbox" id="removeAccount" name="removeAccount">Remove Account
+            </label>
+        </div>
+        <hr>
+        <p></p>
+        <div>
+            <label for="ConfirmPassword">Confirm Password:</label>
+            <input type="password" id="password" name="password" required
+                placeholder="Enter password to confirm changes">
+        </div>
+        <div>
+            <input type="submit" value="Save Changes">
+        </div>
+    </form>
+</body>
+
+</html>

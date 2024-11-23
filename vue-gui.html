@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>One App</title>
+    <link rel="stylesheet" href="https://unpkg.com/primeicons@7.0.0/primeicons.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/primevue@4.0.0-rc.2/umd/primevue.min.js"></script>
+    <script src="https://unpkg.com/@primevue/themes@4.0.0-rc.2/umd/lara.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js"></script>
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.6.1/github-markdown.min.css">
+    <style>
+        .markdown-body {
+            box-sizing: border-box;
+            min-width: 100px;
+            max-width: 980px;
+            margin: 0px 0px 0px;
+            padding: 15px;
+        }
+
+        .app-dark .markdown-body {
+            /* Inverted colors for dark mode */
+            background-color: #18181B;
+            /* or another dark color */
+            color: white;
+            /* or another light color */
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100">
+
+    <div id="app">
+        <p class="text-xl font-bold text-center px-4 py-2">
+            App
+        </p>
+        <p-tabs :value="activeTab" scrollable>
+            <p-tablist>
+                <p-tab v-for="(c,i) in TABS" :value="`${c}`">{{c}}</p-tab>
+            </p-tablist>
+            <p-tabpanels>
+                <p-tabpanel value="Register">
+                    <div class="mt-5">
+                        <h2 class="text-xl font-bold">Register</h2>
+                        <form @submit.prevent="api.registerUser">
+                            <p-inputtext v-model="registerForm.username" placeholder="Username" type="text" required
+                                class="border p-2 rounded w-full mb-2"></p-inputtext>
+                            <p-inputtext v-model="registerForm.full_name" placeholder="Full Name" type="text" required
+                                class="border p-2 rounded w-full mb-2"></p-inputtext>
+                            <p-inputtext v-model="registerForm.email" placeholder="Email" type="email" required
+                                class="border p-2 rounded w-full mb-2"></p-inputtext>
+                            <p-inputtext v-model="registerForm.password" placeholder="Password" type="password" required
+                                class="border p-2 rounded w-full mb-2"></p-inputtext>
+                            <p-inputtext v-model="registerForm.invite" placeholder="Invite code" type="invite" required
+                                class="border p-2 rounded w-full mb-2"></p-inputtext>
+
+                            <p-button @click="()=>api.registerUser(registerForm)" type="submit" :disabled="loading"
+                                class="bg-blue-500 text-white px-4 py-2 rounded w-full">
+                                <span v-if="loading" class="pi pi-spinner animate-spin"></span>
+                                <span v-else>Register</span>
+                            </p-button>
+                            
+                        </form>
+                    </div>
+                </p-tabpanel>
+
+                <p-tabpanel value="Login">
+                    <div>
+                        <h2 class="text-xl font-bold mb-4">Login</h2>
+                        <form @submit.prevent="loginUser">
+                            <p-inputtext v-model="loginForm.username" placeholder="Email" type="text" required
+                                class="border p-2 rounded w-full mb-2"></p-inputtext>
+
+                            <p-inputtext v-if="!useOtp" v-model="loginForm.password" placeholder="Password"
+                                :type="passwordVisible ? 'text' : 'password'" required
+                                class="border p-2 rounded w-full mb-2"></p-inputtext>
+
+                            <p-inputtext v-if="useOtp" v-model="loginForm.otp" placeholder="OTP" type="number" required
+                                class="border p-2 rounded w-full mb-2"></p-inputtext>
+
+
+                            <p-button icon="pi pi-eye" class="mb-2"
+                                @click="()=>passwordVisible=!passwordVisible"></p-button>
+                            <p-toggleswitch v-model="useOtp" label="Login with OTP"></p-toggleswitch>
+                            <span class="font-medium">Login with OTP</span>
+
+                            <p-button type="submit" :disabled="loading"
+                                class="bg-blue-500 text-white px-4 py-2 rounded w-full">
+                                <span v-if="loading" class="pi pi-spinner animate-spin"></span>
+                                <span v-else>Login</span>
+                            </p-button>
+
+                            <p class="text-center mt-4">Don't have an account?
+                                <a href="/" class="text-blue-500 underline">Register here</a>
+                            </p>
+                        </form>
+                    </div>
+                </p-tabpanel>
+
+                <p-tabpanel value="Profile">
+                    <div>
+                        <h2 class="text-xl font-bold mb-4">Edit User Info</h2>
+                        <form @submit.prevent="api.editUserInfo">
+                            <!-- UUID (Disabled) -->
+                            <p-inputtext v-model="editForm.uuid" disabled placeholder="UUID"
+                                class="border p-2 rounded w-full mb-2"></p-inputtext>
+
+                            <!-- Email (Disabled) -->
+                            <p-inputtext v-model="editForm.email" disabled placeholder="Email"
+                                class="border p-2 rounded w-full mb-2"></p-inputtext>
+
+                            <!-- Full Name -->
+                            <p-inputtext v-model="editForm.full_name" placeholder="Full Name" required
+                                class="border p-2 rounded w-full mb-2"></p-inputtext>
+
+                            <!-- New Password -->
+                            <p-inputtext v-model="editForm.new_password" placeholder="New Password"
+                                class="border p-2 rounded w-full mb-2"></p-inputtext>
+
+                            <!-- Confirm Password -->
+                            <p-inputtext v-model="editForm.password" placeholder="Confirm Password" type="password"
+                                required class="border p-2 rounded w-full mb-2"></p-inputtext>
+
+                            <!-- Save Changes Button -->
+                            <p-button type="submit" :disabled="loading" class="w-full">
+                                <span v-if="loading" class="pi pi-spinner animate-spin"></span>
+                                <span v-else>Save Changes</span>
+                            </p-button>
+
+                            <p-button severity="danger" class="border p-2 rounded w-full mb-2 top-1">Remove
+                                Account</p-button>
+                        </form>
+                    </div>
+                </p-tabpanel>
+
+
+                <p-tabpanel value="Files">
+                    <div>
+                        <h2 class="text-xl font-bold mb-4">Files</h2>
+
+                        <!-- File Upload -->
+                        <div class="mb-4">
+                            <p-fileupload name="file" mode="advanced" :auto="true" customUpload
+                                :uploadHandler="uploadFile" class="mb-2"></p-fileupload>
+                        </div>
+
+                        <!-- File List -->
+                        <div>
+                            <h3 class="text-lg font-semibold mb-2">Uploaded Files</h3>
+                            <p-datatable :value="files" class="p-datatable-sm" v-if="files.length > 0">
+                                <p-column field="name" header="Name"></p-column>
+                                <p-column field="size" header="Size(KB)"></p-column>
+                                <p-column field="status" header="Status"></p-column>
+                                <p-column header="Actions">
+                                    <template #body="slotProps">
+                                        <p-button icon="pi pi-download" class="p-button-text p-button-sm mr-2"
+                                            @click="downloadFile(slotProps.data)"></p-button>
+                                        <p-button icon="pi pi-trash" class="p-button-text p-button-sm p-button-danger"
+                                            @click="deleteFile(slotProps.data)"></p-button>
+                                    </template>
+                                </p-column>
+                            </p-datatable>
+                            <p v-else class="text-gray-500">No files uploaded yet.</p>
+                        </div>
+                    </div>
+                </p-tabpanel>
+
+                <p-tabpanel value="Dashboard">
+                    <div>
+                        <h2 class="text-xl font-bold mb-4">Dashboard</h2>
+                        <!-- Tasks Tab -->
+                        <div>
+                            <!-- List Tasks Section -->
+                            <div class="mb-4">
+                                <p-button label="List All Tasks" class="mb-2" @click="fetchAndDisplayTasks">
+                                </p-button>
+                                <p-datatable :value="tasks" class="p-datatable-sm" v-if="tasks.length > 0">
+                                    <p-column field="task_id" header="Task ID"></p-column>
+                                    <p-column field="status" header="Status"></p-column>
+                                    <p-column field="result" header="Result"></p-column>
+                                    <p-column field="date_done" header="Date Done"></p-column>
+                                </p-datatable>
+                                <p v-else class="text-gray-500">No tasks available.</p>
+                            </div>
+
+                            <!-- Task Actions Section -->
+                            <div>
+                                <p-select v-model="selectedTaskId" :options="taskOptions" placeholder="Select Task ID"
+                                    class="mb-2 w-full">
+                                </p-select>
+
+                                <div class="mb-4">
+                                    <p-button label="Check Task Status" class="mr-2" @click="checkTaskStatus">
+                                    </p-button>
+                                    <p-button label="Stop Task" class="p-button-danger" @click="stopTask">
+                                    </p-button>
+                                </div>
+
+                                <p-textarea v-model="taskStatus"
+                                    placeholder="Task status or operation result will appear here..." rows="4"
+                                    class="w-full" readonly>
+                                </p-textarea>
+                            </div>
+                        </div>
+
+
+                        <!-- Workers Tab -->
+                        <div>
+                            <p-button label="Get Workers" class="mb-2" @click="fetchWorkers">
+                            </p-button>
+                            <p-textarea v-model="workersInfo" placeholder="Worker information will appear here..."
+                                rows="6" class="w-full" readonly>
+                            </p-textarea>
+                        </div>
+
+                    </div>
+                </p-tabpanel>
+
+                <p-tabpanel value="App1">
+                </p-tabpanel>
+
+                <p-tabpanel value="App2">
+                </p-tabpanel>
+
+            </p-tabpanels>
+        </p-tabs>
+    </div>
+</body>
+
+
+<script>
+
+    class APIClient {
+        constructor(baseURL = '') {
+            this.baseURL = baseURL;
+            this.authToken = null;
+        }
+
+        // Helper to set authentication token
+        setAuthToken(token) {
+            this.authToken = token;
+        }
+
+        // Helper for headers
+        getHeaders(isJSON = true) {
+            const headers = {};
+            if (isJSON) headers["Content-Type"] = "application/json";
+            if (this.authToken) headers["Authorization"] = `Bearer ${this.authToken}`;
+            return headers;
+        }
+
+        // Helper for making requests
+        async request(endpoint, method = "GET", body = null, isJSON = true) {
+            const options = {
+                method,
+                headers: this.getHeaders(isJSON),
+            };
+            if (body) {
+                options.body = isJSON ? JSON.stringify(body) : body;
+            }
+            const response = await fetch(`${this.baseURL}${endpoint}`, options);
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ message: "Unknown error" }));
+                throw new Error(error.detail || error.message || "Request failed");
+            }
+            return response.json();
+        }
+
+        // Register User
+        async registerUser(data) {
+            return this.request("/register", "POST", data);
+        }
+
+        // Get Token (Login)
+        async getToken(email, password) {
+            const formData = new URLSearchParams();
+            formData.append("username", email);
+            formData.append("password", password);
+            const response = await this.request("/token", "POST", formData, false);
+            this.setAuthToken(response.access_token); // Save token for future requests
+            return response;
+        }
+
+        // Edit User Info
+        async editUserInfo(data) {
+            return this.request("/edit", "POST", data);
+        }
+
+        // Remove Account
+        async removeAccount(data) {
+            return this.request("/remove", "POST", data);
+        }
+
+        // Get Current User Info
+        async getCurrentUser() {
+            return this.request("/me");
+        }
+
+        // Read Session
+        async readSession() {
+            return this.request("/session");
+        }
+
+        // Get OTP QR Code
+        async getOtpQr() {
+            const response = await fetch(`${this.baseURL}/otp/qr`, {
+                headers: this.getHeaders(),
+            });
+            if (!response.ok) throw new Error("Failed to fetch OTP QR code");
+            return response.blob();
+        }
+
+        // Get Login QR Code
+        async getLoginQr(uid = null) {
+            const endpoint = uid ? `/qr/${uid}` : "/qr";
+            const response = await fetch(`${this.baseURL}${endpoint}`, {
+                headers: this.getHeaders(),
+            });
+            if (!response.ok) throw new Error("Failed to fetch Login QR code");
+            return response.blob();
+        }
+
+        // Login with QR Code
+        async loginWithQr(uid) {
+            return this.request(`/qr/login/${uid}`, "GET");
+        }
+
+        // Get OTP Token
+        async getOtpToken(email, code) {
+            return this.request(`/otp/login/${email}/${code}`, "GET");
+        }
+
+        // Read Icon
+        async getIcon(iconName) {
+            const response = await fetch(`${this.baseURL}/icon/${iconName}`, {
+                headers: this.getHeaders(),
+            });
+            if (!response.ok) throw new Error("Failed to fetch icon");
+            return response.blob();
+        }
+
+        // Logout
+        async logout() {
+            const response = await this.request("/logout", "GET");
+            this.authToken = null; // Clear the token on logout
+            return response;
+        }
+    }
+
+    const { createApp, ref, reactive } = Vue;
+
+    const app = createApp({
+        setup() {
+
+            // State
+            const tasks = ref([{ task_id: 1, status: 1, result: 1, date_done: 1 }]); // List of tasks
+            const taskOptions = ref([1]); // select options for Task IDs
+            const selectedTaskId = ref(null); // Selected Task ID
+            const taskStatus = ref(""); // Status or result message
+            const workersInfo = ref(""); // Workers information
+
+            // Methods
+            const fetchAndDisplayTasks = async () => {
+                try {
+                    const response = await fetch(`${BASE_URL}/tasks/`);
+                    if (response.ok) {
+                        const taskList = await response.json();
+                        tasks.value = taskList;
+                        taskOptions.value = taskList.map((task) => ({
+                            label: task.task_id,
+                            value: task.task_id,
+                        }));
+                    } else {
+                        tasks.value = [];
+                        taskOptions.value = [];
+                        alert(`Error fetching tasks: ${response.status}`);
+                    }
+                } catch (error) {
+                    console.error("Error fetching tasks:", error);
+                }
+            };
+
+            const checkTaskStatus = async () => {
+                if (!selectedTaskId.value) {
+                    alert("Please select a Task ID.");
+                    return;
+                }
+                try {
+                    const response = await fetch(`${BASE_URL}/tasks/status/${selectedTaskId.value}`);
+                    if (response.ok) {
+                        const status = await response.json();
+                        taskStatus.value = JSON.stringify(status, null, 2);
+                    } else {
+                        taskStatus.value = `Error: ${response.status}`;
+                    }
+                } catch (error) {
+                    console.error("Error fetching task status:", error);
+                }
+            };
+
+            const stopTask = async () => {
+                if (!selectedTaskId.value) {
+                    alert("Please select a Task ID.");
+                    return;
+                }
+                try {
+                    const response = await fetch(`${BASE_URL}/tasks/stop/${selectedTaskId.value}`);
+                    if (response.ok) {
+                        const result = await response.json();
+                        taskStatus.value = JSON.stringify(result, null, 2);
+                    } else {
+                        taskStatus.value = `Error: ${response.status}`;
+                    }
+                } catch (error) {
+                    console.error("Error stopping task:", error);
+                }
+            };
+
+            const fetchWorkers = async () => {
+                try {
+                    const response = await fetch(`${BASE_URL}/workers/`);
+                    if (response.ok) {
+                        const workers = await response.json();
+                        workersInfo.value = JSON.stringify(workers, null, 2);
+                    } else {
+                        workersInfo.value = `Error: ${response.status}`;
+                    }
+                } catch (error) {
+                    console.error("Error fetching workers:", error);
+                }
+            };
+
+            const files = [{ name: 1, size: 1, status: '' }, { name: 2, size: 2, status: '' },]; // List of uploaded files
+            const uploadFile = (event) => {
+                // Simulating file upload
+                const file = event.files[0];
+                const newFile = {
+                    name: file.name,
+                    size: (file.size / 1024).toFixed(2), // Convert bytes to KB
+                };
+                files.push(newFile);
+                alert(`File "${file.name}" uploaded successfully.`);
+            };
+            const downloadFile = (file) => {
+                // Simulate file download (add real implementation as needed)
+                alert(`Downloading file: ${file.name}`);
+            };
+            const deleteFile = (file) => {
+                // Remove file from the list
+                files = files.filter((f) => f.name !== file.name);
+                alert(`File "${file.name}" deleted successfully.`);
+            };
+
+            const editForm = ref({ uuid: "", email: "", full_name: "", new_password: "", removeAccount: false, password: "", });
+
+            const loginForm = ref({ username: '', password: '', otp: '', });
+            const useOtp = ref(false);
+            const loading = ref(false);
+            const passwordVisible = ref(false);
+            const loginUser = () => {
+                loading = true;
+                // Call API for login
+                api.loginUser;
+            }
+
+            const registerForm = { username: '', full_name: '', email: '', password: '', invite: '', };
+            const user = null;
+            const session = null;
+            const api = new APIClient();
+
+            const activeTab = 'Profile';
+            const TABS = ['Register', 'Login', 'Profile', "Files", "Dashboard", "App1", "App2"];
+            return {
+                TABS, activeTab, user, session, api,
+                tasks, taskOptions, selectedTaskId, taskStatus, workersInfo, fetchAndDisplayTasks, checkTaskStatus, stopTask, fetchWorkers,
+                files, uploadFile, downloadFile, deleteFile,
+                editForm,
+                registerForm,
+                loginForm, useOtp, loading, passwordVisible, loginUser
+            };
+        }
+    });
+
+    app.use(PrimeVue.Config, {
+        theme: {
+            preset: PrimeVue.Themes.Lara,
+            options: { prefix: 'p', darkModeSelector: '.app-dark', cssLayer: false, }
+        }
+    });
+    app.use(PrimeVue.ToastService);
+
+    app.directive('ripple', PrimeVue.Ripple);
+
+    app.component('p-themeswitcher', PrimeVue.ThemeSwitcher);
+    app.component('p-autocomplete', PrimeVue.AutoComplete);
+    app.component('p-accordion', PrimeVue.Accordion);
+    app.component('p-accordionpanel', PrimeVue.AccordionPanel);
+    app.component('p-accordionheader', PrimeVue.AccordionHeader);
+    app.component('p-accordioncontent', PrimeVue.AccordionContent);
+    app.component('p-accordiontab', PrimeVue.AccordionTab);
+    app.component('p-animateonscroll', PrimeVue.AnimateOnScroll);
+    app.component('p-avatar', PrimeVue.Avatar);
+    app.component('p-avatargroup', PrimeVue.AvatarGroup);
+    app.component('p-badge', PrimeVue.Badge);
+    app.component('p-badgedirective', PrimeVue.BadgeDirective);
+    app.component('p-blockui', PrimeVue.BlockUI);
+    app.component('p-button', PrimeVue.Button);
+    app.component('p-buttongroup', PrimeVue.ButtonGroup);
+    app.component('p-breadcrumb', PrimeVue.Breadcrumb);
+    app.component('p-calendar', PrimeVue.Calendar);
+    app.component('p-card', PrimeVue.Card);
+    app.component('p-cascadeselect', PrimeVue.CascadeSelect);
+    app.component('p-carousel', PrimeVue.Carousel);
+    app.component('p-checkbox', PrimeVue.Checkbox);
+    app.component('p-chip', PrimeVue.Chip);
+    app.component('p-chips', PrimeVue.Chips);
+    app.component('p-colorpicker', PrimeVue.ColorPicker);
+    app.component('p-column', PrimeVue.Column);
+    app.component('p-columngroup', PrimeVue.ColumnGroup);
+    app.component('p-confirmdialog', PrimeVue.ConfirmDialog);
+    app.component('p-confirmpopup', PrimeVue.ConfirmPopup);
+    app.component('p-confirmationservice', PrimeVue.ConfirmationService);
+    app.component('p-contextmenu', PrimeVue.ContextMenu);
+    app.component('p-datatable', PrimeVue.DataTable);
+    app.component('p-dataview', PrimeVue.DataView);
+    app.component('p-datepicker', PrimeVue.DatePicker);
+    app.component('p-deferredcontent', PrimeVue.DeferredContent);
+    app.component('p-dialog', PrimeVue.Dialog);
+    app.component('p-dialogservice', PrimeVue.DialogService);
+    app.component('p-divider', PrimeVue.Divider);
+    app.component('p-dock', PrimeVue.Dock);
+    app.component('p-drawer', PrimeVue.Drawer);
+    app.component('p-dynamicdialog', PrimeVue.DynamicDialog);
+    app.component('p-editor', PrimeVue.Editor);
+    app.component('p-fieldset', PrimeVue.Fieldset);
+    app.component('p-fileupload', PrimeVue.FileUpload);
+    app.component('p-floatlabel', PrimeVue.FloatLabel);
+    app.component('p-focustrap', PrimeVue.FocusTrap);
+    app.component('p-galleria', PrimeVue.Galleria);
+    app.component('p-iconfield', PrimeVue.IconField);
+    app.component('p-inputicon', PrimeVue.InputIcon);
+    app.component('p-image', PrimeVue.Image);
+    app.component('p-inlinemessage', PrimeVue.InlineMessage);
+    app.component('p-inplace', PrimeVue.Inplace);
+    app.component('p-inputchips', PrimeVue.InputChips);
+    app.component('p-inputgroup', PrimeVue.InputGroup);
+    app.component('p-inputgroupaddon', PrimeVue.InputGroupAddon);
+    app.component('p-inputmask', PrimeVue.InputMask);
+    app.component('p-inputnumber', PrimeVue.InputNumber);
+    app.component('p-inputotp', PrimeVue.InputOtp);
+    app.component('p-inputswitch', PrimeVue.InputSwitch);
+    app.component('p-inputtext', PrimeVue.InputText);
+    app.component('p-knob', PrimeVue.Knob);
+    app.component('p-listbox', PrimeVue.Listbox);
+    app.component('p-megamenu', PrimeVue.MegaMenu);
+    app.component('p-menu', PrimeVue.Menu);
+    app.component('p-menubar', PrimeVue.Menubar);
+    app.component('p-message', PrimeVue.Message);
+    app.component('p-metergroup', PrimeVue.MeterGroup);
+    app.component('p-multiselect', PrimeVue.MultiSelect);
+    app.component('p-orderlist', PrimeVue.OrderList);
+    app.component('p-organizationchart', PrimeVue.OrganizationChart);
+    app.component('p-overlaybadge', PrimeVue.OverlayBadge);
+    app.component('p-overlaypanel', PrimeVue.OverlayPanel);
+    app.component('p-paginator', PrimeVue.Paginator);
+    app.component('p-panel', PrimeVue.Panel);
+    app.component('p-panelmenu', PrimeVue.PanelMenu);
+    app.component('p-password', PrimeVue.Password);
+    app.component('p-picklist', PrimeVue.PickList);
+    app.component('p-popover', PrimeVue.Popover);
+    app.component('p-progressbar', PrimeVue.ProgressBar);
+    app.component('p-progressspinner', PrimeVue.ProgressSpinner);
+    app.component('p-rating', PrimeVue.Rating);
+    app.component('p-radiobutton', PrimeVue.RadioButton);
+    app.component('p-ripple', PrimeVue.Ripple);
+    app.component('p-row', PrimeVue.Row);
+    app.component('p-scrollpanel', PrimeVue.ScrollPanel);
+    app.component('p-scrolltop', PrimeVue.ScrollTop);
+    app.component('p-select', PrimeVue.Select);
+    app.component('p-selectbutton', PrimeVue.SelectButton);
+    app.component('p-skeleton', PrimeVue.Skeleton);
+    app.component('p-slider', PrimeVue.Slider);
+    app.component('p-sidebar', PrimeVue.Sidebar);
+    app.component('p-speeddial', PrimeVue.SpeedDial);
+    app.component('p-splitbutton', PrimeVue.SplitButton);
+    app.component('p-splitter', PrimeVue.Splitter);
+    app.component('p-splitterpanel', PrimeVue.SplitterPanel);
+    app.component('p-stepper', PrimeVue.Stepper);
+    app.component('p-stepperpanel', PrimeVue.StepperPanel);
+    app.component('p-steps', PrimeVue.Steps);
+    app.component('p-styleclass', PrimeVue.StyleClass);
+    app.component('p-tabmenu', PrimeVue.TabMenu);
+    app.component('p-tabs', PrimeVue.Tabs);
+    app.component('p-tablist', PrimeVue.TabList);
+    app.component('p-tab', PrimeVue.Tab);
+    app.component('p-tabpanels', PrimeVue.TabPanels);
+    app.component('p-tabpanel', PrimeVue.TabPanel);
+    app.component('p-tabview', PrimeVue.TabView);
+    app.component('p-tag', PrimeVue.Tag);
+    app.component('p-terminal', PrimeVue.Terminal);
+    app.component('p-textarea', PrimeVue.Textarea);
+    app.component('p-tieredmenu', PrimeVue.TieredMenu);
+    app.component('p-timeline', PrimeVue.Timeline);
+    app.component('p-togglebutton', PrimeVue.ToggleButton);
+    app.component('p-toggleswitch', PrimeVue.ToggleSwitch);
+    app.component('p-tooltip', PrimeVue.Tooltip);
+    app.component('p-toast', PrimeVue.Toast);
+    app.component('p-toastservice', PrimeVue.ToastService);
+    app.component('p-toolbar', PrimeVue.Toolbar);
+    app.component('p-tree', PrimeVue.Tree);
+    app.component('p-treeselect', PrimeVue.TreeSelect);
+    app.component('p-treetable', PrimeVue.TreeTable);
+    app.component('p-virtualscroller', PrimeVue.VirtualScroller);
+
+
+    app.mount('#app');
+</script>
+
+</html>

@@ -1,16 +1,18 @@
 
+from Config import APP_BACK_END, RABBITMQ_URL, MONGO_URL, MONGO_DB, CELERY_META, CELERY_RABBITMQ_BROKER, RABBITMQ_USER, RABBITMQ_PASSWORD, REDIS_URL
+
 from datetime import datetime
 from multiprocessing import shared_memory
+import threading
 import time
 from typing import Any
 from uuid import uuid4
 from zoneinfo import ZoneInfo
-from typing_extensions import Unpack
 import requests
 import celery
 import celery.states
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 import redis
@@ -22,22 +24,27 @@ import requests
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
-from Storages import SingletonKeyValueStorage
+try:
+    from ..Storages import SingletonKeyValueStorage
+except Exception as e:
+    from Storages import SingletonKeyValueStorage
 
 class RabbitmqMongoApp:
-    store = SingletonKeyValueStorage().mongo_backend()
-    rabbitmq_URL = 'localhost:15672'
-    mongo_URL = 'mongodb://localhost:27017'
-    mongo_DB = 'tasks'
-    celery_META = 'celery_taskmeta'
-    celery_broker = 'amqp://localhost'
+    rabbitmq_URL = RABBITMQ_URL
+    mongo_URL = MONGO_URL
+    mongo_DB = MONGO_DB
+    celery_META = CELERY_META
+    CELERY_RABBITMQ_BROKER = CELERY_RABBITMQ_BROKER
+
+    store = SingletonKeyValueStorage().mongo_backend(mongo_URL)
 
     @staticmethod
     def get_celery_app():
-        return celery.Celery('tasks', broker=RabbitmqMongoApp.celery_broker, backend=f'{RabbitmqMongoApp.mongo_URL}/{RabbitmqMongoApp.mongo_DB}')
+        return celery.Celery(RabbitmqMongoApp.mongo_DB, broker=RabbitmqMongoApp.CELERY_RABBITMQ_BROKER,
+                             backend=f'{RabbitmqMongoApp.mongo_URL}/{RabbitmqMongoApp.mongo_DB}')
     
     @staticmethod
-    def check_rabbitmq_health(url=None, user='guest', password='guest') -> bool:
+    def check_rabbitmq_health(url=None, user=RABBITMQ_USER, password=RABBITMQ_PASSWORD) -> bool:
         if url is None:
             url = f'http://{RabbitmqMongoApp.rabbitmq_URL}/api/health/checks/alarms'
         try:
@@ -117,7 +124,7 @@ class RabbitmqMongoApp:
 class RedisApp:
     store = SingletonKeyValueStorage().redis_backend()
     # Redis URL configuration
-    redis_URL = 'redis://localhost:6379/0'
+    redis_URL = REDIS_URL
     redis_client = redis.Redis.from_url(redis_URL)
 
     @staticmethod
@@ -190,8 +197,12 @@ class RedisApp:
         else:
             return {'error': 'Task not found'}
 
-class BasicApp(RedisApp):
-    pass
+if APP_BACK_END=='redis':
+    BasicApp = RedisApp
+elif APP_BACK_END=='mongodbrabbitmq':
+    BasicApp = RabbitmqMongoApp
+else:
+    raise ValueError(f'no back end of {APP_BACK_END}')
 
 class ServiceOrientedArchitecture:
     class Model(BaseModel):
@@ -216,7 +227,29 @@ class ServiceOrientedArchitecture:
 
         def __call__(self, *args, **kwargs):
             BasicApp.set_task_started(self.model)
-            return self.model
+            # A shared flag to communicate between threads
+            stop_flag = threading.Event()
+
+            # Function to check if the task should be stopped, running in a separate thread
+            def check_task_status(task_id):
+                
+                while True:
+                    task = BasicApp.get_task_status(task_id)
+                    if task: break
+                    time.sleep(1)
+
+                while not stop_flag.is_set():
+                    task = BasicApp.get_task_status(task_id)
+                    if task['status'] == celery.states.REVOKED:
+                        print(f"Task marked as {celery.states.REVOKED}, setting stop flag.")
+                        stop_flag.set()
+                        break
+                    time.sleep(1)  # Delay between checks to reduce load on MongoDB
+
+            # Start the status-checking thread
+            status_thread = threading.Thread(target=check_task_status, args=(self.model.task_id,))
+            status_thread.start()
+            return stop_flag
 
 ##################### IO 
 

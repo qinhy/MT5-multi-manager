@@ -1,10 +1,14 @@
+from Config import APP_SECRET_KEY, SESSION_DURATION
 
 import os
 import random
 import time
 from fastapi import FastAPI, HTTPException
-from Manager import BookService, MT5CopyLastRatesService,MT5Manager,MT5Account,Book
-from basic import BasicApp
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+from Task.Manager import BookService, MT5CopyLastRatesService,MT5Manager,MT5Account,Book
+from Task.Basic import BasicApp
+from User.UserAPIs import router as users_router
 
 ######################################### Celery connect to local rabbitmq and db sqlite backend
 os.environ.setdefault('CELERY_TASK_SERIALIZER', 'json')
@@ -19,6 +23,19 @@ def api_ok():
 class CeleryTask:
     api = FastAPI()
 
+
+    api.add_middleware(
+        CORSMiddleware,
+        allow_origins=['*',],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    api.add_middleware(SessionMiddleware,
+                       secret_key=APP_SECRET_KEY, max_age=SESSION_DURATION)
+
+    api.include_router(users_router, prefix="", tags=["users"])
+    
     ########################### essential function
     @staticmethod
     def is_json_serializable(value) -> bool:
